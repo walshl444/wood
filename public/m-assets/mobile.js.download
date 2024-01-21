@@ -1,0 +1,452 @@
+﻿/// <reference path="jQuery.js" />
+/// <reference path="common.js" />
+
+Modal = function () { }
+Modal.IsOpen = function () { return false; }
+
+/*********************************************************
+**	NAMESPACE :: General
+*********************************************************/
+General = function () { }
+
+General.SetWizardPage = function (showPage) {
+    if (!showPage.tagName)
+        showPage = document.getElementById(showPage);
+
+    var area = showPage.parentNode;
+    for (var i = 0; i < area.childNodes.length; i++) {
+        if (area.childNodes[i].style)
+            area.childNodes[i].style.display = 'none';
+    }
+
+    showPage.style.display = '';
+}
+
+General.IsValidAmount = function (value, state, label) {
+    if (!Is.Currency(value, false, label))
+        return false;
+
+    value = parseFloat(value.replace(/[^0-9\-\(\)]/g, ''));
+    if (isNaN(value) || value <= 0)
+        return false;
+
+    return true;
+};
+
+/*********************************************************
+**	NAMESPACE :: Transfers
+*********************************************************/
+Transfer = function () { }
+Transfer.CreateEditor = { Request: null };
+
+Transfer.SwapPage = function (showPage) {
+    UI.ResetServiceMessages('transfer-create-messages');
+    General.SetWizardPage(showPage);
+}
+
+Transfer.IsValidEffective = function (effective_value, effective_state, effective_label, sender) {
+    if (!Is.Date(effective_value, false, effective_label))
+        return false;
+
+    effective_value = new Date(Date.parse(effective_value));
+    var allowed_effective = Transfer.GetDateConstraints(sender);
+    if (allowed_effective.Minimum > effective_value || allowed_effective.Maximum < effective_value) {
+        return false;
+    }
+
+    return true;
+};
+
+Transfer.GetDateConstraints = function (sender) {
+    var min_date = null;
+    var max_date = null;
+
+    if (sender != null) {
+        var jSender = $(sender);
+        if (!(typeof jSender.attr('data-mindate') === 'undefined')) {
+            try {
+                min_date = new Date(Date.parse(jSender.attr('data-mindate')));
+            } catch (ex) {
+                min_date = null;
+            }
+        }
+
+        if (!(typeof jSender.attr('data-maxdate') === 'undefined')) {
+            try {
+                max_date = new Date(Date.parse(jSender.attr('data-maxdate')));
+            } catch (ex) {
+                max_date = null;
+            }
+        }
+    }
+
+    if (min_date == null) {
+        min_date = new Date();
+        min_date.setMonth(min_date.getMonth() - 1);
+        min_date.setHours(0, 0, 0, 0);
+    }
+
+    if (max_date == null) {
+        max_date = new Date();
+        max_date.setFullYear(max_date.getFullYear() + 1);
+        max_date.setHours(0, 0, 0, 0);
+    }
+
+    return { Minimum: min_date, Maximum: max_date };
+}
+
+Transfer.Validate = function () {
+    var valid = Validate('transfer_from', Is.Match, "^[0-9]{1,12}$", 'transfer_from_');
+    valid = Validate('transfer_to', Is.Match, "^[0-9]{1,12}$", 'transfer_to_') ? valid : false;
+    valid = Validate('transfer_amount', General.IsValidAmount, null, 'transfer_amount_') ? valid : false;
+    valid = Validate('transfer_effective', Transfer.IsValidEffective, null, 'transfer_effective_') ? valid : false;
+
+    var from = document.getElementById('transfer_from');
+    var to = document.getElementById('transfer_to');
+    if (from.value == to.value) {
+        valid = false;
+        $(from).addClass('invalid-data');
+        $(to).addClass('invalid-data');
+    }
+
+    return valid;
+}
+
+Transfer.Confirm = function () {
+    if (!Transfer.Validate()) return;
+
+    Transfer.CreateEditor.Request = Transfer.BuildCreate();
+    Transfer.ConfirmCreate(Transfer.CreateEditor.Request);
+    Transfer.SwapPage(document.getElementById('wizard-conclusion'));
+}
+
+Transfer.BuildCreate = function () {
+    var from = document.getElementById('transfer_from');
+    var to = document.getElementById('transfer_to');
+
+    var detail = {
+        From: { Reference: from.value, Name: from.options[from.selectedIndex].text },
+        To: { Reference: to.value, Name: to.options[to.selectedIndex].text },
+        Amount: parseFloat(document.getElementById('transfer_amount').value.replace(/[^0-9\.]/g, '')).toFixed(2),
+        Memo: UI.GetValue('transfer_memo'),
+        ScheduledFor: new Date(Date.parse(document.getElementById('transfer_effective').value))
+    };
+
+    return detail;
+}
+
+Transfer.ConfirmCreate = function (detail) {
+    document.getElementById('confirm_from').innerHTML = detail.From.Name;
+    document.getElementById('confirm_to').innerHTML = detail.To.Name;
+    document.getElementById('confirm_amount').innerHTML = '$' + detail.Amount;
+    document.getElementById('confirm_memo').innerHTML = detail.Memo;
+    document.getElementById('confirm_effective').innerHTML = detail.ScheduledFor.toLocaleDateString();
+}
+
+Transfer.Create = function () {
+    var wait_indicator = document.getElementById('page-wait-indicator');
+
+    var on_exception = function (result, state) {
+        wait_indicator.style.display = 'none';
+        document.getElementById('wizard_complete').disabled = false;
+    }
+
+    var create_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'transfer-create-messages');
+        if (success) {
+            document.location = getUri('transfer/' + result.Transfer.Id + '?created=true');
+            return;
+        } else {
+            on_exception(result, state);
+        }
+    }
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/transfer');
+        var post = Transfer.BuildCreatePost(Transfer.CreateEditor.Request, result.Sequence.Value);
+        Ajax.GetJson(create_complete, "POST", uri, post, null);
+    };
+
+    UI.ResetServiceMessages('transfer-create-messages');
+    wait_indicator.style.display = '';
+    document.getElementById('wizard_complete').disabled = true;
+
+    Ajax.StepJsonSequence({
+        Uri: getUri('json/transfer/create/init'),
+        OnSuccess: init_complete,
+        OnException: on_exception,
+        MessageArea: 'transfer-create-messages'
+    });
+}
+
+Transfer.BuildCreatePost = function (transfer, sequence) {
+    var effective_date = transfer.ScheduledFor;
+    effective_date = (effective_date.getMonth() + 1) + '/' + effective_date.getDate() + '/' + effective_date.getFullYear();
+
+    var post = "sequence=" + encodeURIComponent(sequence) +
+        "&from=" + encodeURIComponent(transfer.From.Reference) +
+        "&to=" + encodeURIComponent(transfer.To.Reference) +
+        "&amount=" + encodeURIComponent(transfer.Amount) +
+        "&memo=" + encodeURIComponent(transfer.Memo) +
+        "&effective=" + encodeURIComponent(effective_date);
+
+    return post;
+}
+
+/*********************************************************
+**	NAMESPACE :: Payment
+*********************************************************/
+Payment = function () { }
+Payment.CreateEditor = { Request: null };
+
+Payment.SwapPage = function (showPage) {
+    UI.ResetServiceMessages('payment-create-messages');
+    General.SetWizardPage(showPage);
+}
+
+Payment.Validate = function () {
+    var valid = Validate('payment_account', Is.Match, "^[0-9]{1,12}$", 'payment_account_');
+    valid = Validate('payment_payee', Is.Match, "^[0-9]{1,12}$", 'payment_payee_') ? valid : false;
+    valid = Validate('payment_amount', General.IsValidAmount, null, 'payment_amount_') ? valid : false;
+    valid = Validate('payment_send', Is.Date, false, 'payment_send_') ? valid : false;
+
+    if (valid) {
+        var delivery = Payment.CalculteDelivery();
+        var delivery_warn = document.getElementById('payment_delivery_warning');
+        if (delivery == null) {
+            delivery_warn.style.display = '';
+            $('#payment_send').addClass('invalid-data');
+            $('#payment_send_').addClass('invalid-data');
+
+            valid = false;
+        } else {
+            delivery_warn.style.display = 'none';
+            Payment.UpdateDelivery(delivery);
+        }
+    }
+
+    return valid;
+}
+
+Payment.Confirm = function () {
+    if (!Payment.Validate()) return;
+
+    Payment.CreateEditor.Request = Payment.BuildCreate();
+    Payment.ConfirmCreate(Payment.CreateEditor.Request);
+    Payment.SwapPage(document.getElementById('wizard-conclusion'));
+}
+
+Payment.BuildCreate = function () {
+    var account = document.getElementById('payment_account');
+    var payee = document.getElementById('payment_payee');
+
+    var detail = {
+        Account: { Reference: account.value, Name: account.options[account.selectedIndex].text },
+        Payee: { Reference: payee.value, Name: payee.options[payee.selectedIndex].text },
+        Amount: parseFloat(document.getElementById('payment_amount').value.replace(/[^0-9\.]/g, '')).toFixed(2),
+        SendOn: document.getElementById('payment_send').value,
+        DeliveryBy: document.getElementById('payment_delivery').innerHTML
+    };
+
+    return detail;
+}
+
+Payment.ConfirmCreate = function (detail) {
+    document.getElementById('confirm_account').innerHTML = detail.Account.Name;
+    document.getElementById('confirm_payee').innerHTML = detail.Payee.Name;
+    document.getElementById('confirm_amount').innerHTML = '$' + detail.Amount;
+    document.getElementById('confirm_send').innerHTML = detail.SendOn;
+    document.getElementById('confirm_delivery').innerHTML = detail.DeliveryBy;
+}
+
+Payment.Create = function () {
+    var wait_indicator = document.getElementById('page-wait-indicator');
+
+    var on_exception = function (result, state) {
+        UI.SetWaitIndicator(false, wait_indicator.id);
+        document.getElementById('wizard_complete').disabled = false;
+        document.getElementById('wizard_back').disabled = false;
+    }
+
+    var create_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'payment-create-messages');
+        if (success) {
+            document.location = getUri('billpay/payment/scheduled?created=true');
+            return;
+        } else {
+            on_exception(result, state);
+        }
+    }
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/billpay/payment');
+        var post = Payment.BuildCreatePost(Payment.CreateEditor.Request, result.Sequence.Value);
+        Ajax.GetJson(create_complete, "POST", uri, post, null);
+    };
+
+    UI.ResetServiceMessages('payment-create-messages');
+    UI.SetWaitIndicator(true, wait_indicator.id);
+    document.getElementById('wizard_complete').disabled = true;
+    document.getElementById('wizard_back').disabled = true;
+
+    Ajax.StepJsonSequence({
+        Uri: getUri('json/billpay/payment/init'),
+        OnSuccess: init_complete,
+        OnException: on_exception,
+        MessageArea: 'payment-create-messages'
+    });
+}
+
+Payment.BuildCreatePost = function (payment, sequence) {
+    var post = "sequence=" + encodeURIComponent(sequence) +
+        "&fundingaccount=" + encodeURIComponent(payment.Account.Reference) +
+        "&payee=" + encodeURIComponent(payment.Payee.Reference) +
+        "&amount=" + encodeURIComponent(payment.Amount) +
+        "&startdate=" + encodeURIComponent(payment.SendOn);
+
+    return post;
+}
+
+Payment.UpdateDelivery = function (process) {
+    var delivery = process || Payment.CalculteDelivery();
+    if (delivery != null) {
+        document.getElementById('payment_delivery').innerHTML = Resource.Months[delivery.getMonth()] + ' ' + Resource.Ordinals[delivery.getDate()] + ', ' + delivery.getFullYear();
+    } else {
+        document.getElementById('payment_delivery').innerHTML = '';
+    }
+}
+
+Payment.CalculteDelivery = function () {
+    var payeeSelect = document.getElementById('payment_payee');
+    if (payeeSelect.selectedIndex <= 0)
+        return null;
+
+    var payee = $(payeeSelect.options[payeeSelect.selectedIndex]);
+    var lead = parseInt(payee.attr('data-lead'));
+    var cutOff = payee.attr('data-cut');
+    cutOff = cutOff.split(':');
+    if (isNaN(lead) || lead < 0 || cutOff.length != 2)
+        return null;
+
+    var sendOn = document.getElementById('payment_send').value;
+    if (!Is.Date(sendOn, false, null))
+        return null;
+
+    try {
+        cutOff[0] = parseInt(cutOff[0]);
+        cutOff[1] = parseInt(cutOff[1]);
+
+        var delivery = new Date(Date.parse(sendOn));
+        cutOff = new Date(Date.UTC(delivery.getUTCFullYear(), delivery.getUTCMonth(), delivery.getUTCDate(), cutOff[0], cutOff[1], 0));
+
+        var utcNow = new Date();
+        utcNow = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), utcNow.getUTCDate(), utcNow.getUTCHours(), utcNow.getUTCMinutes(), utcNow.getUTCSeconds()));
+
+        if (cutOff < utcNow)
+            return null;
+
+        while (lead > 0) {
+            delivery.setDate(delivery.getDate() + 1);
+            if (Payment.IsSchedulable(delivery))
+                lead--;
+        }
+
+        while (!Payment.IsSchedulable(delivery)) {
+            delivery.setDate(delivery.getDate() + 1);
+        }
+
+        $('#payment_send').removeClass('invalid-data');
+        $('#payment_send_').removeClass('invalid-data');
+        document.getElementById('payment_delivery_warning').style.display = 'none';
+        return delivery;
+
+    } catch (ex) {
+        return null;
+    }
+}
+
+Payment.IsSchedulable = function (process) {
+    if (process.getDay() == 0 || process.getDay() == 6)
+        return false;
+
+    var days = Constraints.PaymentBlockout;
+    for (var i = 0; i < days.length; i++) {
+        var block = new Date(days[i]);
+        if (process.getDate() == block.getDate() && process.getFullYear() == block.getFullYear() && process.getMonth() == block.getMonth())
+            return false;
+    }
+
+    return true;
+}
+
+/*********************************************************
+**	NAMESPACE :: GiftCard
+*********************************************************/
+GiftCard = function () { }
+
+GiftCard.GetBalance = function () {
+    var wait_indicator = document.getElementById('page-wait-indicator');
+    document.getElementById('giftcard-result').style.display = 'none';
+
+    var on_exception = function (result, state) {
+        wait_indicator.style.display = 'none';
+        document.getElementById('get-balance').disabled = false;
+    }
+
+    var get_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'giftcard-messages');
+        if (success) {
+            document.getElementById('result-gc-number').innerHTML = document.getElementById('giftcard-number').value;
+            document.getElementById('result-gc-available').innerHTML = formatCurrency(result.Available);
+            document.getElementById('result-gc-ledger').innerHTML = formatCurrency(result.Ledger);
+            document.getElementById('giftcard-result').style.display = '';
+            wait_indicator.style.display = 'none';
+            document.getElementById('get-balance').disabled = false;
+            return;
+        } else {
+            on_exception(result, state);
+        }
+    }
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/giftcard');
+        var post = GiftCard.BuildPost(document.getElementById('giftcard-number').value, result.Sequence.Value);
+        Ajax.GetJson(get_complete, "POST", uri, post, null);
+    };
+
+    if (GiftCard.IsValid()) {
+
+        UI.ResetServiceMessages('giftcard-messages');
+        wait_indicator.style.display = '';
+        document.getElementById('get-balance').disabled = true;
+
+        Ajax.StepJsonSequence({
+            Uri: getUri('json/giftcard/init'),
+            OnSuccess: init_complete,
+            OnException: on_exception,
+            MessageArea: 'giftcard-messages'
+        });
+    }
+}
+
+GiftCard.BuildPost = function (pan, sequence) {
+    var post = "sequence=" + encodeURIComponent(sequence) +
+        "&pan=" + encodeURIComponent(pan);
+
+    return post;
+}
+
+GiftCard.IsValid = function () {
+    var valid = true;
+    if (document.getElementById('giftcard-number')) {
+        valid = Validate('giftcard-number', GiftCard.IsValidNumber, null, 'giftcard-number-label') ? valid : false;
+    }
+    return valid;
+}
+
+GiftCard.IsValidNumber = function (value, state, label) {
+    if (!Is.Numeric(value, false, label))
+        return false;
+
+    return true;
+}

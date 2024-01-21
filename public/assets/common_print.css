@@ -1,0 +1,26 @@
+﻿.no-print { display: none; }
+.must-print { display: block; }
+.page-break { page-break-after: always; }
+.overview-detail { padding-right: 10px; }
+.overview-detail td { padding-left: 25px; padding-right: 0px; }
+.crumbs { display: none; }
+
+.right-layout > .nav { display: none; }
+.right-layout > .background { display: none; }
+.right-layout > .content { width: 100%; float: none; padding: 0; }
+
+.side-layout { }
+.side-layout > .nav { display: none; }
+.side-layout > .background { display: none; }
+.side-layout > .container { width: 100%; float: none; padding: 0; }
+.side-layout > .container.flush { width: 100%; float: none; padding: 0; }
+#transfer_history_container.container { width: 100%; float: none; padding: 0; }
+
+.wu_receipt_page { page-break-before: always; }
+
+/*** PRIMARY LAYOUT ***/
+#header-container { display: none; }
+#navigation-container { display: none; }
+#page-overview { margin: 0; width: 99%; padding: 0px 15px 0px 15px; border-bottom-color: #CCC; }
+#page-content { margin: 0; width: 99%; padding: 0; }
+#footer-container { display: none; }

@@ -1,0 +1,467 @@
+﻿/// <reference path="jQuery.js" />
+/// <reference path="common.js" />
+
+/************************************
+**	STATIC CLASS :: Modal
+************************************/
+Modal = function () { }
+
+/// <summary>Dialog that is popped in the center of the screen.</summary>
+Modal.MainDialog = null;
+
+/// <summary>Backdrop for the dialog that is popped in the center of the screen.</summary>
+Modal.Backdrop = null;
+
+/// <summary>Area where the requested data is shown.</summary>
+Modal.ClientZone = null;
+
+/// <summary>Area where the title is shown.</summary>
+Modal.TitleArea = null;
+
+/// <summary>The markup used to generated the loading screen for the dialog.</summary>
+Modal.LoadingScreen = '<div id="dialog-loading-screen">Loading, Please Wait....</div>';
+
+Modal.Setup = function (width, height) {
+    /// <summary>Sets the dialog up to show at the given size.</summary>
+    /// <param name="width">Width of the dialog to show.</param>
+    /// <param name="height">Height of the dialog to show.</param>
+
+    Modal.HideDropdownLists();
+
+    var popup = Modal.MainDialog;
+    if (popup == null) {
+        popup = document.createElement('div');
+        popup.id = 'dialog-main-window';
+
+        var titleBar = document.createElement('div');
+        titleBar.id = 'dialog-title-bar';
+
+        var closeButton = document.createElement('a');
+        closeButton.id = 'dialog-close-button';
+        closeButton.innerHTML = '&nbsp;';
+
+        var waitIndicator = document.createElement('div');
+        waitIndicator.id = 'dialog-wait-indicator';
+        waitIndicator.style.display = 'none';
+
+        var titleArea = document.createElement('span');
+        titleArea.id = 'dialog-title';
+        titleArea.innerHTML = 'Wizard Dialog';
+
+        var clientArea = document.createElement("div");
+        clientArea.id = 'dialog-client-area';
+        clientArea.innerHTML = Modal.LoadingScreen;
+
+        titleBar.appendChild(closeButton);
+        titleBar.appendChild(waitIndicator);
+        titleBar.appendChild(titleArea);
+        popup.appendChild(titleBar);
+        popup.appendChild(clientArea);
+
+        // UI.AttachEvent(titleBar, 'mousedown', Modal.StartDrag);
+        UI.AttachEvent(closeButton, 'click', Modal.Hide);
+
+        Modal.MainDialog = popup;
+        Modal.ClientZone = clientArea;
+        Modal.TitleArea = titleArea;
+        document.body.appendChild(Modal.MainDialog);
+    }
+
+    var clientZone = Modal.ClientZone;
+    clientZone.style.height = height + 'px';
+    popup.style.width = width + 'px';
+    $(popup).addClass('shown');
+
+    return popup;
+}
+
+Modal.CreateBackdrop = function () {
+    /// <summary>Sets the backdrop up for the dialog to prevent editting of background content.</summary>
+
+    var block = Modal.Backdrop;
+    if (block == null) {
+        block = document.createElement('div');
+        block.id = 'dialog-modal-background';
+        block.style.display = 'none';
+
+        Modal.Backdrop = block;
+        document.body.appendChild(Modal.Backdrop);
+    }
+
+    block.style.display = 'block';
+    block.style.zIndex = '997';
+    return block;
+}
+
+Modal.HasZAxisSelectIssue = function () {
+    /// <summary>Determines if the browser has issues rendering dropdown lists.</summary>
+
+    if (Browser)
+        return (Browser.LayoutEngine == 'Trident' && Browser.LayoutEngineVersion.Major < 3);
+
+    return false;
+}
+
+Modal.ShowDropdownLists = function () {
+    /// <summary>Shows all dropdown lists currently on the page.</summary>
+
+    if (!Modal.HasZAxisSelectIssue())
+        return;
+
+    var lists = document.getElementsByTagName('select');
+    for (var i = 0; i < lists.length; i++) {
+        lists[i].style.display = '';
+    }
+}
+
+Modal.HideDropdownLists = function () {
+    /// <summary>Hides all dropdown lists currently on the page.</summary>
+
+    if (!Modal.HasZAxisSelectIssue())
+        return;
+
+    var lists = document.getElementsByTagName('select');
+    for (var i = 0; i < lists.length; i++) {
+        lists[i].style.display = 'none';
+    }
+}
+
+Modal.SetTitle = function (title) {
+    /// <summary>Sets the title of the dialog.</summary>
+    /// <param name="title">The title of the dialog.</param>
+
+    var titleArea = Modal.TitleArea;
+    if (title == null) return;
+
+    titleArea.innerHTML = title;
+}
+
+Modal.ShowHtml = function (title, detail, width, height) {
+    /// <summary>Shows the dialog in the center of the screen with the HTML provided as its content.</summary>
+    /// <param name="title">The title of the dialog.</param>
+    /// <param name="uri">URL to the page to display within the dialog.</param>
+    /// <param name="width">Width of the dialog to show.</param>
+    /// <param name="height">Height of the dialog to show.</param>
+
+    Modal.Popup(width, height);
+    UI.SetWaitIndicator(false, 'dialog-wait-indicator');
+    Modal.SetTitle(title);
+    Modal.ClientZone.innerHTML = detail;
+}
+
+Modal.ShowElement = function (title, detail, width, height, resize) {
+    /// <summary>Shows the dialog in the center of the screen with the HTML provided as its content.</summary>
+    /// <param name="title">The title of the dialog.</param>
+    /// <param name="uri">URL to the page to display within the dialog.</param>
+    /// <param name="width">Width of the dialog to show.</param>
+    /// <param name="height">Height of the dialog to show.</param>
+
+    Modal.Popup(width, height);
+    UI.SetWaitIndicator(false, 'dialog-wait-indicator');
+    Modal.SetTitle(title);
+    Modal.ClientZone.innerHTML = '';
+    Modal.ClientZone.appendChild(detail);
+
+    if (resize) {
+        Modal.Resize();
+    }
+}
+
+Modal.ShowPage = function (title, uri, width, height, resize, callback, state) {
+    /// <summary>Shows the dialog in the center of the screen using the content from the provided page.</summary>
+    /// <param name="title">The title of the dialog.</param>
+    /// <param name="uri">URL to the page to display within the dialog.</param>
+    /// <param name="width">Width of the dialog to show.</param>
+    /// <param name="height">Height of the dialog to show.</param>
+    /// <param name="resize">true if the dialog is automatically resize with the content; otherwise false.</param>
+    /// <param name="callback">The method to callback when the dialog is loaded.</param>
+    /// <param name="state">The async state information to push to the dialog's callback.</param>
+
+    Modal.Popup(width, height);
+    Modal.SetTitle(title);
+    Modal.ClientZone.innerHTML = Modal.LoadingScreen;
+    UI.SetWaitIndicator(true, 'dialog-wait-indicator');
+    Ajax.GetHtml(Modal.ShowPageComplete, Modal.ClientZone.id, "GET", uri, null, { Callback: callback, Resize: resize, State: state });
+}
+
+Modal.ShowPageComplete = function (result, state) {
+    /// <summary>Resizes the dialog if needed and informs the callback the dialog has been loaded.</summary>
+    /// <param name="result">The resulting object from the web service call.</param>
+    /// <param name="state">The async state passed from the originating function.</param>
+
+    UI.SetWaitIndicator(false, 'dialog-wait-indicator');
+    if (state.Resize && Modal.IsOpen()) {
+        Modal.Resize();
+    }
+
+    if (state.Callback != null) state.Callback(result, state.State);
+}
+
+Modal.Popup = function (width, height) {
+    /// <summary>Shows the dialog in the center of the screen.</summary>
+    /// <param name="width">Width of the dialog to show.</param>
+    /// <param name="height">Height of the dialog to show.</param>
+
+    document.documentElement.style.overflow = 'hidden';
+
+    var blockMain = Modal.CreateBackdrop();
+    var popup = Modal.Setup(width, height);
+    Modal.CenterInViewPort();
+
+    UI.AttachEvent(document, 'scroll', Modal.CenterInViewPort);
+    UI.AttachEvent(window, 'resize', Modal.CenterInViewPort);
+    UI.AttachEvent(document, 'keyup', Modal.KeyListener);
+}
+
+Modal.IsOpen = function () {
+    /// <summary>Returns true if the dialog is open.</summary>
+
+    return (Modal.MainDialog != null && $(Modal.MainDialog).hasClass('shown'));
+}
+
+Modal.Hide = function () {
+    /// <summary>Closes the dialog.</summary>
+
+    Modal.ShowDropdownLists();
+
+    document.documentElement.style.overflow = '';
+    Modal.Backdrop.style.display = 'none';
+    Modal.Backdrop.style.zIndex = '-1';
+
+    // Modal.MainDialog.style.left = '-' + (Modal.MainDialog.clientWidth + 25) + 'px';
+    Modal.MainDialog.style.top = '-' + (Modal.MainDialog.clientHeight + 25) + 'px';
+    $(Modal.MainDialog).removeClass('shown');
+
+    UI.RemoveEvent(document, 'scroll', Modal.CenterInViewPort);
+    UI.RemoveEvent(window, 'resize', Modal.CenterInViewPort);
+    UI.RemoveEvent(document, 'keyup', Modal.KeyListener);
+}
+
+Modal.Resize = function () {
+    /// <summary>Automatically resizes the dialog to the height of its content.</summary>
+
+    var height = 0;
+    var children = Modal.ClientZone.childNodes;
+    for (i = 0; i < children.length; i++) {
+        if (children[i].offsetHeight)
+            height += $(children[i]).outerHeight(true);
+    }
+
+    Modal.Popup(Modal.MainDialog.clientWidth, height);
+}
+
+Modal.CenterInViewPort = function () {
+    /// <summary>Centers the dialog in the current view port.</summary>
+
+    if (!Modal.IsOpen()) return;
+
+    var popup = Modal.MainDialog;
+    var blockMain = Modal.Backdrop;
+    if (popup == null || blockMain == null)
+        return;
+
+    var offsetX = Client.GetScrollWidth();
+    var offsetY = Client.GetScrollHeight();
+    var windowHeight = Client.GetHeight();
+    var windowWidth = Client.GetWidth();
+
+    x = offsetX + (windowWidth / 2) - (popup.clientWidth / 2);
+    y = offsetY + (windowHeight / 2) - (popup.clientHeight / 2);
+
+    popup.style.left = x + 'px';
+    popup.style.top = y + 'px';
+    blockMain.style.left = offsetX + 'px';
+    blockMain.style.top = offsetY + 'px';
+    blockMain.style.height = windowHeight + 'px';
+    blockMain.style.width = windowWidth + 'px';
+}
+
+Modal.KeyListener = function (e) {
+    /// <summary>Listens to key presses and takes the appropriate action.</summary>
+
+    e = e || event;
+    var target = e.target || e.srcElement;
+
+    var escapeKey = (window.event) ? 27 : e.DOM_VK_ESCAPE;
+    if (e.keyCode == escapeKey) {
+        Modal.Hide();
+    }
+}
+
+Modal.SetWaitIndicator = function (show, id) {
+    /// <summary>Toggles the state of the default wait indicator for the modal dialog.</summary>
+    /// <param name="show">true when the indicator is to be shown; otherwise fale.</param>
+    /// <param name="id">The identifier of wait indicator section.</param>
+
+    id = id || 'dialog-wait-indicator';
+    var zone = document.getElementById(id);
+    if (!zone) return;
+
+    zone.style.display = (show) ? '' : 'none';
+}
+
+Modal.EnableCloseButton = function (enable){
+    var closeButton = document.getElementById('dialog-close-button');
+
+    if(enable)
+        UI.AttachEvent(closeButton, 'click', Modal.Hide);
+    else
+        UI.RemoveEvent(closeButton, 'click', Modal.Hide);
+}
+
+Modal.SetWizardPage = function (showPage) {
+    if (!showPage.tagName)
+        showPage = document.getElementById(showPage);
+
+    var area = showPage.parentNode;
+    for (var i = 0; i < area.childNodes.length; i++) {
+        if (area.childNodes[i].style)
+            area.childNodes[i].style.display = 'none';
+    }
+
+    showPage.style.display = '';
+    if (Modal.IsOpen())
+        Modal.Resize();
+}
+
+/************************************
+**	Dialog :: Dragging
+************************************/
+
+/// <summary>Location of the dialog when the drag request was started..</summary>
+Modal.DragReference = { X: 0, Y: 0 };
+
+/// <summary>Point where the drag request was initialized from.</summary>
+Modal.DragOrigin = { X: 0, Y: 0 };
+
+Modal.StartDrag = function (e) {
+    /// <summary>Initializes the drag process for the dialog.</summary>
+
+    Modal.DragOrigin.X = e.clientX + Client.GetScrollWidth();
+    Modal.DragOrigin.Y = e.clientY + Client.GetScrollHeight();
+
+    Modal.DragReference.X = parseInt(Modal.MainDialog.style.left, 10);
+    Modal.DragReference.Y = parseInt(Modal.MainDialog.style.top, 10);
+
+    if (document.addEventListener) {
+        document.addEventListener('mousemove', Modal.OnDrag, true);
+        document.addEventListener('mouseup', Modal.StopDrag, true);
+    } else if (document.attachEvent) {
+        document.attachEvent('onmousemove', Modal.OnDrag);
+        document.attachEvent('onmouseup', Modal.StopDrag);
+    }
+}
+
+Modal.StopDrag = function () {
+    /// <summary>Removes the event listeners for the drag process.</summary>
+
+    Modal.DragOrigin.X = 0;
+    Modal.DragOrigin.Y = 0;
+
+    Modal.DragReference.X = 0;
+    Modal.DragReference.Y = 0;
+
+    if (document.removeEventListener) {
+        document.removeEventListener('mousemove', Modal.OnDrag, true);
+        document.removeEventListener('mouseup', Modal.StopDrag, true);
+    } else if (document.detachEvent) {
+        document.detachEvent('onmousemove', Modal.OnDrag);
+        document.detachEvent('onmouseup', Modal.StopDrag);
+    }
+}
+
+Modal.OnDrag = function (e) {
+    /// <summary>Performs the drag operation for the dialog.</summary>
+
+    var mouse = Client.GetMousePosition(e);
+
+    Modal.MainDialog.style.left = (Modal.DragReference.X + (mouse.X - Modal.DragOrigin.X)) + 'px';
+    Modal.MainDialog.style.top = (Modal.DragReference.Y + (mouse.Y - Modal.DragOrigin.Y)) + 'px';
+
+    if (window.event.cancelBubble) {
+        window.event.cancelBubble = true;
+        window.event.returnValue = false;
+    } else if (e.preventDefault) {
+        e.preventDefault();
+    }
+}
+
+/************************************
+**	Dialog :: Speed Bumps
+************************************/
+
+Modal.ShowSpeedBump = function (uri, target, showAs) {
+    if (!target || target == '')
+        target = '_blank';
+
+    var warning = $(document.createElement('div'));
+    warning.addClass('warning');
+    warning[0].innerHTML = Resource.SpeedBump.WarningMessage;
+
+    var destinationLabel = $(document.createElement('div'));
+    destinationLabel.addClass('destination_label');
+    destinationLabel[0].innerHTML = Resource.SpeedBump.DestinationLabel;
+
+    var destination = $(document.createElement('div'));
+    destination.addClass('destination');
+    destination[0].innerHTML = showAs || uri;
+
+    var warning = $(document.createElement('div'));
+    warning.addClass('warning');
+    warning[0].innerHTML = Resource.SpeedBump.WarningMessage;
+
+    var okGo = $(document.createElement('a'));
+    okGo.addClass('button primary');
+    okGo.attr('href', uri);
+    okGo.attr('target', target);
+    okGo[0].innerHTML = Resource.SpeedBump.Continue;
+    UI.AttachEvent(okGo[0], 'click', Modal.Hide);
+
+    var stopMe = $(document.createElement('a'));
+    stopMe.addClass('button gray');
+    stopMe.attr('href', 'javascript:Modal.Hide();');
+    stopMe[0].innerHTML = Resource.SpeedBump.Cancel;
+
+    var buttonSpacer = document.createElement('span');
+    buttonSpacer.innerHTML = '&nbsp;';
+
+    var commandBar = $(document.createElement('div'));
+    commandBar.addClass('dialog-footer');
+
+    commandBar[0].appendChild(okGo[0]);
+    commandBar[0].appendChild(buttonSpacer);
+    commandBar[0].appendChild(stopMe[0]);
+
+    var dialog = $(document.createElement('div'));
+    dialog.addClass('bump_dialog');
+    dialog[0].appendChild(warning[0]);
+    dialog[0].appendChild(destinationLabel[0]);
+    dialog[0].appendChild(destination[0]);
+    dialog[0].appendChild(commandBar[0]);
+
+    Modal.ShowElement(Resource.SpeedBump.Title, dialog[0], 500, 200, true);
+}
+
+UI.LocateSpeedBumps = function () {
+    var elements = $('.speed_bump');
+    for (var i = 0; i < elements.length; i++) {
+        UI.AttachSpeedBump(elements[i]);
+    }
+}
+
+UI.AttachSpeedBump = function (element) {
+    var detail = $(element);
+    var bumpTo = detail.attr('href');
+    var bumpTarget = detail.attr('target');
+    var showAs = detail.attr('data-uri');
+
+    var bump_user = function (evt) {
+        UI.StopBubble(evt, true);
+        Modal.ShowSpeedBump(bumpTo, bumpTarget, showAs);
+        return false;
+    }
+
+    UI.AttachEvent(element, 'click', bump_user);
+}
+
+$(document).ready(UI.LocateSpeedBumps);

@@ -1,0 +1,917 @@
+﻿/// <reference path="jQuery.js" />
+/// <reference path="common.js" />
+/// <reference path="dialog.js" />
+
+/*********************************************************
+**	NAMESPACE :: Auth
+*********************************************************/
+Auth = {};
+
+Auth.GenerateGuid = function () {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+Auth.CreateCSRFAuthenticationToken = function () {
+    var guid = Auth.GenerateGuid();
+    document.getElementById('hidden_token').value = guid;
+    document.cookie = "authentication_token= ; path =/;expires = Thu, 01 Jan 1970 00:00:00 GMT"
+    document.cookie = "authentication_token=" + guid + "; path =/";
+}
+
+$(document).ready(Auth.CreateCSRFAuthenticationToken);
+
+Auth.FirstFactor = function (includePassword) {
+    var commit = Validate('principal_name', Is.NotEmpty);
+    if (includePassword)
+        commit = (Validate('password', Is.NotEmpty)) ? commit : false;
+
+    if (commit) {
+        UI.SetWaitIndicator(true);
+        var continue_button = document.getElementById('challenge-commit');
+        if (continue_button)
+            continue_button.disabled = true;
+    }
+
+    return commit;
+};
+
+Auth.SecondFactor = function () {
+    var commit = Auth.ValidSecondFactor();
+    if (commit) {
+        UI.SetWaitIndicator(true);
+        var continue_button = document.getElementById('challenge-commit');
+        if (continue_button) {
+            continue_button.disabled = true;
+        }
+
+        var decline_button = document.getElementById('challenge-decline');
+        if (decline_button) {
+            decline_button.disabled = true;
+        }
+    }
+
+    return commit;
+};
+
+Auth.UsernameRecovery = function () {
+    var commit = Validate('username_recovery_subject', Is.EmailAddress);
+    commit = (Validate('username_recovery_account_number', Is.NotEmpty)) ? commit : false;
+    commit = (Validate('username_recovery_id_type', Is.NotEmpty)) ? commit : false;
+    commit = (Validate('username_recovery_id_number', Is.NotEmpty)) ? commit : false;
+
+    if (commit) {
+        UI.SetWaitIndicator(true);
+        var continue_button = document.getElementById('challenge-commit');
+        if (continue_button)
+            continue_button.disabled = true;
+    }
+
+    return commit;
+};
+
+Auth.ValidSecondFactor = function () {
+    var optionalChallenge = document.getElementById('selected_challenge');
+    if (optionalChallenge != null) {
+        return Auth.ValidAnswer(optionalChallenge.value);
+    }
+
+    return (
+        Auth.ValidAnswer('totp') &&
+        Auth.ValidAnswer('question') &&
+        Auth.ValidAnswer('password') &&
+        Auth.ValidQuestionSetup() &&
+        Auth.ValidEmailSetup() &&
+        Auth.ValidLegacySecondFactor()
+    );
+};
+
+Auth.ValidLegacySecondFactor = function () {
+    var commit = true;
+    var questions = document.getElementsByName('questions');
+    for (var i = 0; i < questions.length; i++) {
+        commit = (Validate('answer_' + questions[i].value, Is.NotEmpty)) ? commit : false;
+    }
+
+    var verify_answer = function (value, state, exceptionLabel) {
+        return (value != null && value.length && value.length >= 3);
+    }
+
+    var question_setup = document.getElementsByName('question_setup');
+    for (var i = 0; i < question_setup.length; i++) {
+        var must_provide = parseInt(document.getElementById('question_setup_' + question_setup[i].value).value);
+        for (var x = 0; x < must_provide; x++) {
+            commit = (Validate('question_' + question_setup[i].value + '_' + x, Is.NotEmpty, null, 'question_' + question_setup[i].value + '_' + x + '_')) ? commit : false;
+            commit = (Validate('answer_' + question_setup[i].value + '_' + x, verify_answer, null, 'answer_' + question_setup[i].value + '_' + x + '_')) ? commit : false;
+        }
+    }
+
+    if (Auth.ValidQuestionSetup() === false) {
+        commit = false;
+    }
+
+    return commit;
+};
+
+Auth.ValidAnswer = function (challenge) {
+    var answerId = challenge + '_answer';
+    var answerField = document.getElementById(answerId);
+
+    var confirmId = challenge + '_confirm';
+    var confirmField = document.getElementById(confirmId);
+
+    if (answerField == null) {
+        return true;
+    }
+
+    var valid = Validate(answerId, Is.NotEmpty)
+    if (!valid || confirmField == null) {
+        return valid;
+    }
+
+    if (answerField.value != confirmField.value) {
+        $(answerField).addClass('invalid-data');
+        $(confirmField).addClass('invalid-data');
+        return false;
+
+    } else if (confirmField != null) {
+        $(confirmField).removeClass('invalid-data');
+    }
+
+    return valid;
+}
+
+Auth.ValidQuestionSetup = function () {
+    var setupCount = document.getElementById('question_setup_count');
+    if (setupCount == null) {
+        return true;
+    }
+
+    var verify_answer = function (value, state, exceptionLabel) {
+        return (value != null && value.length && value.length >= 3);
+    }
+
+    var commit = true;
+    var mustProvide = parseInt(setupCount.value);
+
+    for (var x = 0; x < mustProvide; x++) {
+        var baseName = 'question_' + x;
+        commit = (Validate(baseName, Is.NotEmpty, null, baseName + '_')) ? commit : false;
+
+        baseName = 'question_answer_' + x;
+        commit = (Validate(baseName, verify_answer, null, baseName + '_')) ? commit : false;
+    }
+
+    return commit;
+}
+
+Auth.ValidEmailSetup = function () {
+    var isEmailSetup = document.getElementById('otp_email_accept');
+    if (isEmailSetup == null || isEmailSetup.value === 'false') {
+        return true;
+    }
+
+    return Validate('otp_email_subject', Is.EmailAddress, false, 'otp_email_subject_');
+}
+
+Auth.DeclineChallenge = function (type) {
+    var accept = document.getElementById(type + '_accept');
+    accept.value = 'false';
+    document.getElementById('challenge-commit').click();
+}
+
+Auth.NextOptionalChallenge = function () {
+    Auth.MoveOptionalChallenge(true);
+}
+
+Auth.PreviousOptionalChallenge = function () {
+    Auth.MoveOptionalChallenge(false);
+}
+
+Auth.MoveOptionalChallenge = function (forward) {
+    var challenges = document.getElementById('optional_challenges');
+    var current = document.getElementById('selected_challenge');
+    if (challenges == null || current == null) {
+        return;
+    }
+
+    var available = challenges.childNodes;
+    var hunting = current.value;
+    var found, next;
+
+    var i;
+    for (i = 0; i < available.length; i++) {
+        var review = (forward) ? i : (available.length - i - 1);
+        var review = available[review];
+
+        if (found != null && $(review).attr('data-challenge') != null) {
+            next = review;
+            break;
+
+        } else if ($(review).attr('data-challenge') === hunting) {
+            found = review;
+        }
+    }
+
+    if (next == null) {
+        return;
+    }
+
+    $(found).removeClass('active').addClass('inactive');
+    $(next).removeClass('inactive').addClass('active');
+
+    if (forward) {
+        document.getElementById('challenge-back').style.display = '';
+    } else if (i < available.length - 1) {
+        document.getElementById('challenge-back').style.display = 'none';
+    }
+
+    current.value = $(next).attr('data-challenge');
+}
+
+Auth.ChangePassword = function () {
+    var commit = Validate('new_password', Is.Password, null, 'new_password_');
+    commit = (Validate('confirm_password', Is.Password, null, 'confirm_password_')) ? commit : false;
+    if (commit) {
+        var password = document.getElementById('new_password');
+        var password_confirm = document.getElementById('confirm_password');
+
+        if (password.value != password_confirm.value) {
+            commit = false;
+            $(password).addClass('invalid-data');
+            $(password_confirm).addClass('invalid-data');
+            $('#new_password_').addClass('invalid-data');
+            $('#confirm_password_').addClass('invalid-data');
+        }
+    }
+
+    if (commit) {
+        UI.SetWaitIndicator(true);
+        var continue_button = document.getElementById('challenge-commit');
+        if (continue_button)
+            continue_button.disabled = true;
+    }
+
+    return commit;
+};
+
+Auth.ShowRecoveryToken = function (button) {
+    var tokenArea = document.getElementById('recovery_token_area');
+    button.style.display = 'none';
+    tokenArea.style.display = '';
+
+    return true;
+};
+
+
+Auth.ResendRecoveryToken = function (button) {
+    document.getElementById('username_recovery_answer').value = '';
+    document.getElementById('challenge-commit').click();
+    return true;
+};
+
+Auth.AgreeTerms = function () {
+    var id = document.getElementById('agreements').value;
+
+    var answer = document.getElementById('answer_' + id);
+
+    answer.value = "true";
+
+    return true;
+}
+
+Auth.MustAgreeTerms = function () {
+    var uri = getUri('login/must_agree');
+    Modal.ShowPage(Resource.Common.Cancel, uri, 500, 200, true);
+}
+
+Auth.CancelTerms = function () {
+    window.location = getUri('login/decline');
+}
+Auth.AcceptTerms = function () {
+    return true;
+}
+
+Auth.DeclineTerms = function () {
+    var uri = getUri('login/must_agree');
+    Modal.ShowPage(Resource.Common.Cancel, uri, 500, 200, true);
+}
+
+/*********************************************************
+**	NAMESPACE :: Profile
+*********************************************************/
+Profile = {};
+
+Profile.ChangePassword = function () {
+    var commit = (Validate('new_password', Is.Password, null, 'new_password_'));
+    commit = (Validate('confirm_password', Is.Password, null, 'confirm_password_')) ? commit : false;
+    if (commit) {
+        var password = document.getElementById('new_password');
+        var password_confirm = document.getElementById('confirm_password');
+
+        if (password.value != password_confirm.value) {
+            commit = false;
+            $(password).addClass('invalid-data');
+            $(password_confirm).addClass('invalid-data');
+            $('#new_password_').addClass('invalid-data');
+            $('#confirm_password_').addClass('invalid-data');
+        }
+    }
+
+    commit = Validate('principal_name', Is.NotEmpty, null, 'principal_name_') ? commit : false;
+    commit = (Validate('password', Is.NotEmpty, null, 'password_')) ? commit : false;
+
+    return commit;
+};
+
+Profile.ChangeUsername = function () {
+    var verify_principal = function (value, state, exceptionLabel) {
+        return (value != null && value.length && value.length >= 3);
+    }
+
+    var commit = Auth.ValidSecondFactor();
+    if (document.getElementById('principal_new')) {
+        commit = (Validate('principal_new', verify_principal, null, 'principal_new_')) ? commit : false;
+        commit = (Validate('principal_confirm', verify_principal, null, 'principal_confirm_')) ? commit : false;
+
+        if (commit) {
+            var principal = document.getElementById('principal_new');
+            var principal_confirm = document.getElementById('principal_confirm');
+
+            if (principal.value != principal_confirm.value) {
+                commit = false;
+                $(principal).addClass('invalid-data');
+                $(principal_confirm).addClass('invalid-data');
+                $('#principal_new_').addClass('invalid-data');
+                $('#principal_confirm_').addClass('invalid-data');
+            }
+        }
+    }
+
+    return commit;
+};
+
+Profile.ShowInstall = function (block, target) {
+    var nav = block.parentNode;
+    while (nav.tagName.toLowerCase() != 'div')
+        nav = nav.parentNode;
+
+    $('div.oauth-app', nav).removeClass('active');
+    $(block).addClass('active');
+
+    target = document.getElementById(target);
+    var zone = target.parentNode;
+    while (zone.tagName.toLowerCase() != 'div')
+        zone = zone.parentNode;
+
+    $('div.oauth-app-install', zone).removeClass('active');
+    $(target).addClass('active');
+};
+
+Profile.DeleteBiometrics = function (element) {
+    if (element.disabled) {
+        return;
+    } else if (!confirm(Resource.Security.ConfirmBiometricsDelete)) {
+        return;
+    }
+
+    element.disabled = true;
+    var context = $(element);
+    var id = context.attr('data-uri');
+
+    var on_exception = function (waiting) {
+        element.disabled = false;
+    };
+
+    var on_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'active_biometrics_notice');
+        if (!success) {
+            element.disabled = false;
+            return;
+        }
+
+        var fullRow = element.parentNode;
+        while (fullRow.tagName != 'TR') {
+            fullRow = fullRow.parentNode;
+        }
+
+        fullRow.parentNode.removeChild(fullRow);
+    };
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/profile/security/biometrics/remove');
+        var post = 'sequence=' + encodeURIComponent(result.Sequence.Value) +
+            '&id=' + encodeURIComponent(id);
+
+        Ajax.GetJson(on_complete, 'POST', uri, post);
+    };
+
+    UI.ResetServiceMessages('active_biometrics_notice');
+
+    Ajax.StepJsonSequence({
+        Uri: getUri('json/profile/security/challenges/init'),
+        OnSuccess: init_complete,
+        OnException: on_exception,
+        MessageArea: 'active_biometrics_notice'
+    });
+};
+
+Profile.AddAuthenticator = function () {
+    $('#setup_totp_wizard').removeClass('hide');
+
+    $('#totp_generating').removeClass('hide');
+    $('#totp_setup_token').addClass('hide');
+
+    var loadingImg = getUri('images/progress/loader.gif');
+    $('#totp_qr_code').attr('src', loadingImg);
+    
+    var on_complete = function (result, state) {
+        document.getElementById('add_another_totp').disabled = false;
+
+        var success = UI.ShowServiceMessages(result, 'active_totp_notice');
+        if (success) {
+            $('#totp_principal').text(result.PrincipalName);
+            $('#totp_secret').text(result.Token);
+
+            document.getElementById('totp_token').value = result.Token;
+            document.getElementById('totp_signature').value = result.Signature;
+
+            var qrUri = getUri('json/profile/security/authenticator/qr?code=') + encodeURIComponent(result.Token) +
+                '&principal=' + encodeURIComponent(result.PrincipalName);
+
+            $('#totp_qr_code').attr('src', qrUri);
+
+            $('#totp_setup_token').removeClass('hide');
+            $('#totp_generating').addClass('hide');
+
+            document.getElementById('auth_code_verify').disabled = false;
+        }
+    }
+
+    var uri = getUri('json/profile/security/authenticator/generate');
+
+    UI.ResetServiceMessages('active_totp_notice');
+    document.getElementById('add_another_totp').disabled = true;
+
+    Ajax.GetJson(on_complete, 'POST', uri, null);
+};
+
+Profile.SetupAuthenticator = function () {
+    var commit = (Validate('totp_code_current', Is.NotEmpty, null, 'totp_code_current_'));
+    commit = (Validate('totp_device_name', Is.NotEmpty, null, 'totp_device_name_') ? commit : false);
+    if (!commit) {
+        return;
+    }
+    
+    var on_complete = function (result, state) {
+        document.getElementById('auth_code_verify').disabled = false;
+
+        var success = UI.ShowServiceMessages(result, 'authenticator_messages');
+        if (success) {
+            var detailRow = document.getElementById('active_totp_list').insertRow(1);
+            detailRow.className = 'new'
+
+            var nameCell = detailRow.insertCell(0);
+            var createdCell = detailRow.insertCell(1);
+            var lastAccessedCell = detailRow.insertCell(2);
+            var deleteCell = detailRow.insertCell(3);
+
+            $(nameCell).text(result.Credentials.Subject);
+            createdCell.innerHTML = Resource.Security.LastChanged;
+            lastAccessedCell.innerHTML = Resource.Security.PasswordNotAccessed;
+
+            var deleteButton = document.createElement('input');
+            $(deleteButton).attr('type', 'button');
+            $(deleteButton).attr('data-uri', result.Credentials.Id);
+            deleteButton.className = 'button caution';
+            deleteButton.value = Resource.Security.RevokePasswordButton;
+
+            deleteCell.className = 'right';
+            deleteCell.appendChild(deleteButton);
+
+            var revoke_click = function () {
+                Profile.DeleteAuthenticator(deleteButton);
+            }
+            UI.AttachEvent(deleteButton, 'click', revoke_click);
+
+            $('#manage_totps').removeClass('hide');
+            $('#setup_totp_wizard').addClass('hide');
+
+            document.getElementById('totp_device_name').value = '';
+            document.getElementById('totp_code_current').value = '';
+            document.getElementById('totp_token').value = '';
+            document.getElementById('totp_signature').value = '';
+        }
+    }
+
+    var uri = getUri('json/profile/security/authenticator/verify')
+    var post = "verify=" + encodeURIComponent(document.getElementById('totp_code_current').value) +
+        "&name=" + encodeURIComponent(document.getElementById('totp_device_name').value) +
+        "&token=" + encodeURIComponent(document.getElementById('totp_token').value) +
+        "&signature=" + encodeURIComponent(document.getElementById('totp_signature').value);
+
+    UI.ResetServiceMessages('authenticator_messages');
+    document.getElementById('auth_code_verify').disabled = true;
+
+    Ajax.GetJson(on_complete, 'POST', uri, post);
+};
+
+Profile.DeleteAuthenticator = function (element) {
+    if (element.disabled) {
+        return;
+    } else if (!confirm(Resource.Security.ConfirmAuthenticatorDelete)) {
+        return;
+    }
+
+    element.disabled = true;
+    var context = $(element);
+    var id = context.attr('data-uri');
+
+    var on_exception = function (waiting) {
+        element.disabled = false;
+    };
+
+    var on_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'active_totp_notice');
+        if (!success) {
+            element.disabled = false;
+            return;
+        }
+
+        var fullRow = element.parentNode;
+        while (fullRow.tagName != 'TR') {
+            fullRow = fullRow.parentNode;
+        }
+
+        fullRow.parentNode.removeChild(fullRow);
+    };
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/profile/security/authenticator/remove');
+        var post = 'sequence=' + encodeURIComponent(result.Sequence.Value) +
+            '&id=' + encodeURIComponent(id);
+
+        Ajax.GetJson(on_complete, 'POST', uri, post);
+    };
+
+    UI.ResetServiceMessages('active_totp_notice');
+
+    Ajax.StepJsonSequence({
+        Uri: getUri('json/profile/security/challenges/init'),
+        OnSuccess: init_complete,
+        OnException: on_exception,
+        MessageArea: 'active_totp_notice'
+    });
+};
+
+Profile.VerifyAuthenticator = function () {
+    var commit = (Validate('auth_code_current', Is.NotEmpty, null, 'auth_code_current_'));
+    if (!commit)
+        return;
+
+    var on_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'authenticator_messages');
+        if (success) {
+            window.location = getUri('profile?authenticator=true');
+        } else {
+            document.getElementById('auth_code_verify').disabled = false;
+        }
+    }
+
+    var uri = getUri('json/profile/security/authenticator/verify')
+    var post = "code=" + encodeURIComponent(document.getElementById('auth_code_current').value);
+
+    UI.ResetServiceMessages('authenticator_messages');
+    document.getElementById('auth_code_verify').disabled = true;
+
+    Ajax.GetJson(on_complete, 'POST', uri, post);
+};
+
+Profile.ResetAuthenticator = function () {
+    var commit = (Validate('auth_code_current', Is.NotEmpty, null, 'auth_code_current_'));
+    if (!commit)
+        return;
+
+    var on_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'verify-messages');
+        if (success) {
+            window.location.reload();
+        } else {
+            document.getElementById('auth_code_verify').disabled = false;
+        }
+    }
+
+    var uri = getUri('json/profile/security/authenticator/reset')
+    var post = "code=" + encodeURIComponent(document.getElementById('auth_code_current').value);
+
+    UI.ResetServiceMessages('verify-messages');
+    document.getElementById('auth_code_verify').disabled = true;
+
+    Ajax.GetJson(on_complete, 'POST', uri, post);
+};
+
+Profile.VerifyPhoneNumber = function (button) {
+    var on_exception = function () {
+        UI.SetWaitIndicator(false, 'dialog-wait-indicator');
+        document.getElementById('phone_verification_commit').disabled = false;
+        document.getElementById('phone_verification_cancel').disabled = false;
+    };
+
+    var code_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'verification-message');
+        if (success) {
+            window.location.reload();
+        } else {
+            on_exception();
+        }
+    };
+
+    var send_code = function () {
+        if (!Validate('phone_verification_code', Is.NotEmpty))
+            return;
+
+        var uri = getUri('json/contact/phone/verify')
+        var post = 'id=' + encodeURIComponent(document.getElementById('verify_contact').value) +
+            '&token=' + encodeURIComponent(document.getElementById('phone_verification_code').value) +
+            '&allow_challenges=true';
+
+        UI.SetWaitIndicator(true, 'dialog-wait-indicator');
+        UI.ResetServiceMessages('verification-message');
+        document.getElementById('phone_verification_commit').disabled = true;
+        document.getElementById('phone_verification_cancel').disabled = true;
+        Ajax.GetJson(code_complete, 'POST', uri, post);
+    };
+
+    var setup_verifier = function () {
+        var commit = document.getElementById('phone_verification_commit');
+        if (commit) {
+            UI.AttachEvent(commit, 'click', send_code);
+        }
+    };
+
+    while (button.tagName.toLowerCase() != 'a')
+        button = button.parentNode;
+
+    var uri = $(button).attr('href');
+    Modal.ShowPage(Resource.ContactPoint.VerifyPhoneTitle, uri, 400, 150, true, setup_verifier);
+    return false;
+};
+
+Profile.RemovePhoneVerification = function (button) {
+    while (button.tagName.toLowerCase() != 'a')
+        button = button.parentNode;
+
+    var remove_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'remove-verification-message');
+        if (success) {
+            window.location.reload();
+        } else {
+            on_exception();
+        }
+    };
+
+    var uri = getUri('json/contact/phone/verify/remove');
+    var post = 'id=' + encodeURIComponent($(button).attr('data-oid'));
+    UI.ResetServiceMessages('remove-verification-message');
+    Ajax.GetJson(remove_complete, 'POST', uri, post);
+
+    return false;
+};
+
+Profile.EditChallengeSettings = function () {
+    var is_processing = function (waiting) {
+        if (waiting.Success != null) {
+            waiting = waiting.Success;
+        }
+
+        document.getElementById('challenge_settings_commit').disabled = waiting;
+        document.getElementById('challenge_settings_cancel').disabled = waiting;
+        UI.SetWaitIndicator(waiting, 'dialog-wait-indicator');
+    };
+
+    var save_settings_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'challenge-settings-message');
+        if (success) {
+            Modal.Hide();
+        } else {
+            is_processing(false);
+        }
+    };
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/profile/security/challenges');
+        var post = 'sequence=' + encodeURIComponent(result.Sequence.Value) +
+            '&frequency=' + encodeURIComponent(document.getElementById('challenge_frequency').value);
+
+        Ajax.GetJson(save_settings_complete, 'POST', uri, post);
+    };
+
+    var save_challenge_settings = function () {
+        is_processing(true);
+        UI.ResetServiceMessages('challenge-settings-message');
+
+        Ajax.StepJsonSequence({
+            Uri: getUri('json/profile/security/challenges/init'),
+            OnSuccess: init_complete,
+            OnException: is_processing,
+            MessageArea: 'challenge-settings-message'
+        });
+    };
+
+    var challenge_dialog_setup = function () {
+        if (document.getElementById('challenge_settings_commit')) {
+            UI.AttachEvent(document.getElementById('challenge_settings_commit'), 'click', save_challenge_settings);
+        }
+    };
+
+    var uri = getUri('profile/security/challenges');
+    Modal.ShowPage(Resource.Security.ManageChallengesTitle, uri, 525, 200, true, challenge_dialog_setup);
+    return false;
+};
+
+Profile.MakeReadOnlyField = function (content) {
+    var readOnlyZone = document.createElement('input');
+    $(readOnlyZone).attr('type', 'text');
+    readOnlyZone.className = 'password_copy';
+    readOnlyZone.value = content;
+    readOnlyZone.readOnly = true;
+
+    return readOnlyZone;
+};
+
+Profile.ShowLimitedPassword = function (element) {
+    if (element.disabled)
+        return;
+
+    element.disabled = true;
+    var context = $(element);
+    var id = context.attr('data-uri');
+
+    var on_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'active_password_notice');
+        if (success) {
+            var copyZone = Profile.MakeReadOnlyField(result.Passwords[0].Password);
+            var addTo = element.parentNode;
+            addTo.innerHTML = '';
+            addTo.appendChild(copyZone);
+        } else {
+            element.disabled = false;
+        }
+    };
+
+    var uri = getUri('json/profile/security/limited_password/view');
+    var post = 'id=' + encodeURIComponent(id);
+
+    UI.ResetServiceMessages('active_password_notice');
+    Ajax.GetJson(on_complete, 'POST', uri, post, null);
+};
+
+Profile.IssueLimitedPassword = function () {
+    var commitButton = document.getElementById('gen_limited_password');
+    if (commitButton.disabled)
+        return;
+
+    var verify_principal = function (value, state, exceptionLabel) {
+        return (value != null && value.length && value.length >= 2);
+    }
+
+    if (!Validate('new_password_name', verify_principal))
+        return;
+
+    var on_exception = function (waiting) {
+        commitButton.disabled = false;
+    };
+
+    var on_complete = function (result, state) {
+        commitButton.disabled = false;
+        var success = UI.ShowServiceMessages(result, 'issue_password_notice');
+        if (!success) return;
+
+        document.getElementById('new_password_name').value = '';
+
+        var issuedPassword = result.Passwords[0];
+        document.getElementById('new_password_dialog').style.display = '';
+        document.getElementById('password_issued').innerHTML = '';
+        document.getElementById('password_issued').appendChild(Profile.MakeReadOnlyField(issuedPassword.Password));
+
+        $('.empty', document.getElementById('active_passwords_list')).hide();
+
+        var detailRow = document.getElementById('active_passwords_list').insertRow(1);
+        detailRow.className = 'new'
+
+        var nameCell = detailRow.insertCell(0);
+        var createdCell = detailRow.insertCell(1);
+        var lastAccessedCell = detailRow.insertCell(2);
+        var revokeCell = detailRow.insertCell(3);
+
+        $(nameCell).text(issuedPassword.Name);
+        createdCell.innerHTML = Resource.Security.LastChanged;
+        lastAccessedCell.innerHTML = Resource.Security.PasswordNotAccessed;
+
+        var revokeButton = document.createElement('input');
+        $(revokeButton).attr('type', 'button');
+        $(revokeButton).attr('data-uri', issuedPassword.Uri);
+        revokeButton.className = 'button caution';
+        revokeButton.value = Resource.Security.RevokePasswordButton;
+
+        revokeCell.className = 'right';
+        revokeCell.appendChild(revokeButton);
+
+        var revoke_click = function () {
+            Profile.RevokeLimitedPassword(revokeButton);
+        }
+        UI.AttachEvent(revokeButton, 'click', revoke_click);
+    };
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/profile/security/limited_password');
+        var post = 'sequence=' + encodeURIComponent(result.Sequence.Value) +
+            '&name=' + encodeURIComponent(document.getElementById('new_password_name').value);
+
+        Ajax.GetJson(on_complete, 'POST', uri, post);
+    };
+
+    commitButton.disabled = true;
+    document.getElementById('new_password_dialog').style.display = 'none';
+    UI.ResetServiceMessages('issue_password_notice');
+
+    Ajax.StepJsonSequence({
+        Uri: getUri('json/profile/security/challenges/init'),
+        OnSuccess: init_complete,
+        OnException: on_exception,
+        MessageArea: 'issue_password_notice'
+    });
+};
+
+Profile.RevokeLimitedPassword = function (element) {
+    if (element.disabled)
+        return;
+
+    if (!confirm(Resource.Security.ConfirmRevoke))
+        return;
+
+    element.disabled = true;
+    var context = $(element);
+    var id = context.attr('data-uri');
+
+    var on_exception = function (waiting) {
+        element.disabled = false;
+    };
+
+    var on_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, 'active_password_notice');
+        if (!success) {
+            element.disabled = false;
+            return;
+        }
+
+        var fullRow = element.parentNode;
+        while (fullRow.tagName != 'TR') {
+            fullRow = fullRow.parentNode;
+        }
+
+        var revokedList = document.getElementById('revoked_passwords_list');
+        if (revokedList) {
+            var revokedZone = document.getElementById('revoke_password_zone');
+            if (revokedZone) {
+                revokedZone.style.display = '';
+                $('.empty', revokedZone).hide();
+            }
+
+            var originalCells = $('td', fullRow);
+            var revokedRow = revokedList.insertRow(1);
+            var nameCell = revokedRow.insertCell(0);
+            var createdCell = revokedRow.insertCell(1);
+            var lastAccessedCell = revokedRow.insertCell(2);
+            var revokedCell = revokedRow.insertCell(3);
+
+            revokedRow.className = 'new';
+            nameCell.innerHTML = originalCells[0].innerHTML;
+            createdCell.innerHTML = originalCells[1].innerHTML;
+            lastAccessedCell.innerHTML = originalCells[2].innerHTML;
+            revokedCell.innerHTML = Resource.Security.LastChanged;
+        }
+
+        fullRow.parentNode.removeChild(fullRow);
+    };
+
+    var init_complete = function (result, state) {
+        var uri = getUri('json/profile/security/limited_password/revoke');
+        var post = 'sequence=' + encodeURIComponent(result.Sequence.Value) +
+            '&id=' + encodeURIComponent(id);
+
+        Ajax.GetJson(on_complete, 'POST', uri, post);
+    };
+
+    document.getElementById('new_password_dialog').style.display = 'none';
+    UI.ResetServiceMessages('active_password_notice');
+    
+    Ajax.StepJsonSequence({
+        Uri: getUri('json/profile/security/challenges/init'),
+        OnSuccess: init_complete,
+        OnException: on_exception,
+        MessageArea: 'active_password_notice'
+    });
+};

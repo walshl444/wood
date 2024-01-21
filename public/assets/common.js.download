@@ -1,0 +1,1220 @@
+﻿/// <reference path="jQuery.js" />
+
+function getUri(uri) {
+    return Library.Root + uri;
+}
+
+function getLang() {
+    return $(document.body).attr('lang');
+}
+
+function encode(input) {
+    return $('<div/>').text(input).html();
+}
+
+function decode(input) {
+    return $('<div/>').html(input).text();
+}
+function formatCurrency(amount) {
+    var i = parseFloat(amount);
+    if (isNaN(i)) { i = 0.00; }
+    var negativeLeft = '';
+    var negativeRight = '';
+    if (i < 0) { negativeLeft = '('; negativeRight = ')'; }
+    i = Math.abs(i);
+    i = parseInt((i + .005) * 100);
+    i = i / 100;
+    s = new String(i);
+    if (s.indexOf('.') < 0) { s += '.00'; }
+    if (s.indexOf('.') == (s.length - 2)) { s += '0'; }
+    s = negativeLeft + '$' + s + negativeRight;
+    return s;
+}
+
+function getNextElementSibling(n) {
+    ///<summary>Provides cross browser safe way of getting next element sibling.</summary>
+    x = n.nextSibling;
+    //nodeType 1 is a text node
+    while (x.nodeType != 1) {
+        x = x.nextSibling;
+    }
+    return x;
+}
+
+/*********************************************************
+**	CLASS :: UI
+*********************************************************/
+UI = { }
+
+UI.EscapeRegEx = function (criteria) {
+    var escaped = '';
+    if (criteria == null) return escaped;
+
+    for (var i = 0; i < criteria.length; i++) {
+        var check_me = criteria[i] || criteria.charAt(i);
+        if (!(
+            (check_me >= '0' && check_me <= '9')
+            || (check_me >= 'A' && check_me <= 'Z')
+            || (check_me >= 'a' && check_me <= 'z')
+            || (check_me == ' ')
+        )) {
+            escaped += '\\';
+        }
+
+        escaped += check_me;
+    }
+
+    return escaped;
+}
+
+UI.IsActive = function (element) {
+    /// <summary>Toggles the 'active' class for the element.</summary>
+
+    if (!element.tagName) element = document.getElementById(element);
+    var j = $(element);
+    if (!j.hasClass('active'))
+        j.addClass('active');
+
+    return true;
+}
+
+UI.SubmitFrom = function (event, commit) {
+    /// <summary>Submits the form if the enter key is pressed.</summary>
+
+    var event = (event.which) ? event.which : event.keyCode;
+    if (event == 13) {
+        if (!commit.tagName) commit = document.getElementById(commit);
+        commit.click();
+        return false;
+    }
+
+    return true;
+}
+
+UI.ParseCheckList = function (name) {
+    /// <summary>Creates a comma-delimited array of checkbox values by name.</summary>
+
+    var post = "";
+    var items = document.getElementsByName(name);
+    check = false;
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].checked) {
+            if (check) post += ',';
+            post += items[i].value;
+            check = true;
+        }
+    }
+
+    return post;
+}
+
+UI.ParseHiddenList = function (name) {
+    /// <summary>Creates a comma-delimited array of hidden values by name.</summary>
+
+    var post = "";
+    var items = document.getElementsByName(name);
+    check = false;
+    for (var i = 0; i < items.length; i++) {
+        if (check) post += ',';
+        post += items[i].value;
+        check = true;
+    }
+
+    return post;
+}
+
+UI.CheckAll = function (name) {
+    /// <summary>Checks all checkboxes with the requested named.</summary>
+
+    var items = document.getElementsByName(name);
+    for (var i = 0; i < items.length; i++) {
+        items[i].checked = true;
+    }
+}
+
+UI.UncheckAll = function (name) {
+    /// <summary>Unchecks all checkboxes with the requested named.</summary>
+
+    var items = document.getElementsByName(name);
+    for (var i = 0; i < items.length; i++) {
+        items[i].checked = true;
+    }
+}
+
+UI.AttachEvent = function (element, event, callback) {
+    /// <summary>Attaches an event handler to the requested element.</summary>
+
+    if (window.addEventListener) {
+        element.addEventListener(event, callback, false);
+    } else {
+        element.attachEvent('on' + event, callback);
+    }
+}
+
+UI.RemoveEvent = function (element, event, callback) {
+    /// <summary>Removes an event handler to the requested element.</summary>
+
+    if (window.removeEventListener) {
+        element.removeEventListener(event, callback, false);
+    } else {
+        element.detachEvent('on' + event, callback);
+    }
+}
+
+UI.StopBubble = function (e, includeDefault) {
+    /// <summary>Prevents further events in the stack from firing.</summary>
+
+    if (!e) var e = window.event;
+    e.cancelBubble = true;
+    if (e.stopPropagation) e.stopPropagation();
+    if (includeDefault && e.preventDefault) e.preventDefault();
+}
+
+UI.MouseButtonClicked = function (event) {
+    if (!event) event = window.event;
+    if (typeof event.button != 'undefined' && typeof event.which != 'undefined') {
+        if (event.button == 0) {
+            return 1;
+        } else if (event.button == 4) {
+            return 2;
+        } else if (event.button < event.which) {
+            return event.which;
+        }
+
+    } else if (typeof event.button != 'undefined') {
+        if (event.button == 0) {
+            return 1;
+        } else if (event.button == 4) {
+            return 2;
+        } else {
+            return event.button;
+        }
+
+    } else if (typeof event.which != 'undefined') {
+        return event.which;
+    }
+
+    return null;
+}
+
+UI.GetLinkButtonUri = function (button, event, appendParameters) {
+    /// <summary>Gets the URI for a link button.</summary>
+
+    if (event && UI.MouseButtonClicked(event) != 1)
+        return null;
+
+    while (button.tagName.toLowerCase() != 'a')
+        button = button.parentNode;
+
+    var uri = $(button).attr('href');
+    if (appendParameters) {
+        uri += (uri.indexOf('?') >= 0) ? '&' : '?';
+        uri += appendParameters;
+    }
+
+    return uri;
+}
+
+UI.SupportsPlaceholder = function () {
+    /// <summary>Determines if the browser supports placeholder values.</summary>
+
+    var i = document.createElement('input');
+    return 'placeholder' in i;
+}
+
+UI.SetPlaceholder = function (element, detail) {
+    /// <summary>Uses the title as a placeholder if the input has no text.</summary>
+
+    if (UI.SupportsPlaceholder()) return;
+
+    if (!element.value)
+        element = document.getElementById(element);
+
+    var placeholder = detail || $(element).attr('placeholder');
+    if (!placeholder) return;
+
+    var focus = function (evt) {
+        element.style.color = '#000';
+        if (element.value == placeholder)
+            element.value = '';
+    }
+    UI.AttachEvent(element, 'focus', focus);
+
+    var blur = function (evt) {
+        if (element.value == placeholder || element.value == '') {
+            element.value = placeholder;
+            element.style.color = '#888';
+        }
+    }
+    UI.AttachEvent(element, 'blur', blur);
+
+    blur(null);
+}
+
+UI.SubmitAction = function (key, callback) {
+    /// <summary>Notifies the callback function when the submit button is pressed.</summary>
+
+    key = (key.which) ? key.which : key.keyCode;
+    if (key == 13) {
+        if (callback != null) callback(key);
+        return false;
+    }
+}
+
+UI.GetValue = function (element, placeholder) {
+    /// <summary>Gets the value of the element, if it is the placeholder than it will return an empty string.</summary>
+
+    if (!element.tagName)
+        element = document.getElementById(element);
+
+    placeholder = placeholder || $(element).attr('placeholder');
+    return (element.value == placeholder) ? '' : element.value;
+}
+
+UI.SetupToggle = function (toggleGroup, callback) {
+    if (!toggleGroup.tagName)
+        toggleGroup = document.getElementById(toggleGroup);
+
+    var toggleWrap = $(toggleGroup);
+    var groupTarget = document.getElementById(toggleWrap.attr('data-target'));
+
+    var items = $('.opt', toggleGroup);
+    for (var i = 0; i < items.length; i++) {
+        var toggleManager = UI.CreateToggleManager(items[i], items, groupTarget, callback);
+        UI.AttachEvent(items[i], 'click', toggleManager.OnSelected);
+    }
+}
+
+UI.PulseToggle = function (toggleGroup, state) {
+    if (!toggleGroup.tagName) {
+        toggleGroup = document.getElementById(toggleGroup);
+    }
+
+    var items = $('.opt', toggleGroup);
+    for (var i = 0; i < items.length; i++) {
+        var wrapper = $(items[i]);
+        var isOn = wrapper.hasClass('on');
+        if (isOn == state) {
+            wrapper.addClass('active');
+        } else {
+            wrapper.removeClass('active');
+        }
+    }
+}
+
+UI.CreateToggleManager = function (button, items, target, callback) {
+    var wrapper = $(button);
+    var isOn = wrapper.hasClass('on');
+
+    return {
+        OnSelected: function (evt) {
+            if (target.checked == isOn) {
+                return;
+            }
+
+            target.checked = isOn;
+            for (var i = 0; i < items.length; i++) {
+                $(items[i]).removeClass('active').attr('aria-pressed', 'false');
+            }
+
+            wrapper.addClass('active').attr('aria-pressed', 'true');
+
+            if (callback) {
+                callback(button);
+            }
+
+            UI.StopBubble(evt);
+        }
+    };
+}
+
+UI.SetupFaqToggles = function (zone) {
+    var setupToggle = function (section) {
+        var titleSection = $('.title', section)[0];
+        UI.AttachEvent(titleSection, 'click', function () { $(section).toggleClass('open') });
+    }
+
+    var sections = $('.faq-section.togglable', zone);
+    for (var i = 0; i < sections.length; i++) {
+        setupToggle(sections[i]);
+    }
+}
+UI.ManageAssistanceDisplay = function () {
+    if (document.getElementById('need_assistance_display') != null &&
+        document.getElementById("need_assistance_div") != null &&
+        document.getElementById("need_assistance_div")) {
+        var isDisplay = document.getElementById('need_assistance_display').value;
+        if (isDisplay === "true") {
+            document.getElementById("need_assistance_div").style.display = "inline";
+        }
+        else {
+            document.getElementById("need_assistance_div").style.display = "none";
+        }
+    }
+};
+
+UI.HiddenFieldToManageAssistanceDisplay = function (value) {
+    if (document.getElementById('need_assistance_display') != null){
+        document.getElementById("need_assistance_display").value = value;
+    }
+}
+
+
+UI.SetupRadioGroup = function (optionGroup, callback, as_checkbox) {
+    if (!optionGroup.tagName)
+        optionGroup = document.getElementById(optionGroup);
+
+    var items = $('input', optionGroup);
+    var reset_list = function (evt) {
+        for (var iX = 0; iX < items.length; iX++) {
+            var container = $(items[iX].parentNode);
+            if (items[iX].checked) {
+                container.addClass('active');
+            } else {
+                container.removeClass('active');
+            }
+        }
+    };
+
+    for (var i = 0; i < items.length; i++) {
+        var radioManager = UI.CreateRadioManager(items[i], reset_list, callback, !as_checkbox);
+        UI.AttachEvent(items[i].parentNode, 'click', radioManager.OnSelected);
+    }
+
+    reset_list();
+}
+
+UI.ResetRadioGroup = function (optionGroup) {
+    if (!optionGroup.tagName)
+        optionGroup = document.getElementById(optionGroup);
+
+    var items = $('input', optionGroup);
+    for (var i = 0; i < items.length; i++) {
+        var container = $(items[i].parentNode);
+        if (items[i].checked) {
+            container.addClass('active');
+        } else {
+            container.removeClass('active');
+        }
+    }
+}
+
+UI.CreateRadioManager = function (button, reset_list, callback, is_radio) {
+    return {
+        OnSelected: function (evt) {
+            if (is_radio) {
+                if (!button.checked)
+                    button.checked = true;
+            } else {
+                if (evt == null || evt.srcElement == null || evt.srcElement.tagName.toLowerCase() != 'input')
+                    button.checked = !button.checked;
+            }
+
+            reset_list();
+            if (callback) callback(button);
+            UI.StopBubble(evt);
+        }
+    };
+}
+
+UI.SearchPlaceholder = function (criteria, icon, callback) {
+    /// <summary>Implements a series of event handlers that shows placeholder text and filters a list based off information in a search box.</summary>
+
+    if (!criteria.tagName) criteria = document.getElementById(criteria);
+    if (!criteria.tagName) return;
+
+    if (icon && !icon.tagName) icon = document.getElementById(icon);
+    var placeholder = $(criteria).attr('placeholder');
+    var supportPlaceholder = UI.SupportsPlaceholder();
+
+    var primary = $(criteria.parentNode);
+    var drop = $('.drop', primary);
+    var cancel = (icon != null) ? $(icon) : null;
+    var blur_timer = null;
+
+    var check_press = function (key) {
+        key = (window.Event) ? key.which : key.keyCode;
+        if (key == 27) {
+            criteria.blur();
+            blur_timeout();
+            return;
+        }
+
+        callback();
+    };
+
+    var block = function (key) {
+        key = (window.Event) ? key.which : key.keyCode;
+        return (key != 13);
+    };
+
+    var clearFilter = function (evt) {
+        criteria.value = '';
+        callback();
+        criteria.style.color = '#888';
+        if (!supportPlaceholder)
+            criteria.value = placeholder;
+
+        primary.removeClass('live');
+        if (cancel != null)
+            cancel.removeClass('on');
+    }
+
+    var focus = function (evt) {
+        if (blur_timer != null) {
+            clearTimeout(blur_timer);
+            blur_timer = null;
+        }
+
+        primary.addClass('live');
+        criteria.style.color = '#000';
+        if (!supportPlaceholder && criteria.value == placeholder)
+            criteria.value = '';
+        if (cancel != null)
+            cancel.addClass('on');
+        if (drop != null)
+            drop.addClass('show');
+    }
+
+    var focus_or_clear = function (evt) {
+        if (cancel.hasClass('on')) {
+            clearFilter();
+        } else {
+            criteria.focus();
+        }
+    }
+
+    var blur = function (evt) {
+        blur_timer = window.setTimeout(blur_timeout, 250);
+    }
+
+    var blur_timeout = function (evt) {
+        primary.removeClass('live');
+        if (criteria.value == placeholder || criteria.value == '') {
+            criteria.style.color = '#888';
+            if (!supportPlaceholder)
+                criteria.value = placeholder;
+            if (cancel != null)
+                cancel.removeClass('on');
+        }
+    }
+
+    blur_timeout(null);
+    UI.AttachEvent(criteria, 'keyup', check_press);
+    UI.AttachEvent(criteria, 'keypress', block);
+    UI.AttachEvent(criteria, 'focus', focus);
+    UI.AttachEvent(criteria, 'blur', blur);
+    if (icon != null)
+        UI.AttachEvent(icon, 'click', focus_or_clear);
+    if (UI.GetValue(criteria) != '')
+        callback();
+}
+
+UI.Filter = function (elements, criteria, childIndex) {
+    /// <summary>Filters the list of elements by the name provided.</summary>
+
+    criteria = criteria.replace(/^\s*/, "").replace(/\s*$/, "").toLowerCase();
+
+    var shown = 0;
+    if (criteria == '') {
+        shown = elements.length;
+        for (var i = 0; i < elements.length; i++)
+            elements[i].style.display = '';
+    } else {
+        for (var i = 0; i < elements.length; i++) {
+            if (elements[i].childNodes[childIndex].innerHTML.toLowerCase().indexOf(criteria) != -1) {
+                elements[i].style.display = '';
+                shown++;
+            } else {
+                elements[i].style.display = 'none';
+            }
+        }
+    }
+
+    return shown;
+}
+
+UI.ShowTab = function (tab, panel) {
+    /// <summary>Flips the tab dialog to the specified panel.</summary>
+
+    var parentRow = tab.parentNode.parentNode;
+    var nodes = parentRow.getElementsByTagName('li');
+    for (i = 0; i < nodes.length; i++) {
+        var currentItem = nodes[i].childNodes[0];
+        if (currentItem.className != 'warning')
+            currentItem.className = '';
+    }
+
+    tab.className = 'active';
+
+    if (!panel.tagName) panel = document.getElementById(panel);
+    var parentPanel = panel.parentNode;
+    for (i = 0; i < parentPanel.childNodes.length; i++) {
+        if (parentPanel.childNodes[i].style != null)
+            parentPanel.childNodes[i].style.display = 'none';
+    }
+
+    panel.style.display = '';
+}
+
+UI.Toggle = function (button, zone) {
+    /// <summary>Collapes or expands an area based off its current state.</summary>
+
+    zone = document.getElementById(zone);
+    UI.ToggleElement(button, zone);
+}
+
+UI.ToggleElement = function (button, zone) {
+    if (zone.style.display == 'none') {
+        button.src = Library.Images + 'icons/toggle_minus.png';
+        zone.style.display = '';
+    } else {
+        button.src = Library.Images + 'icons/toggle_plus.png';
+        zone.style.display = 'none';
+    }
+}
+
+UI.ResetServiceMessages = function (zone) {
+    if (zone == null || !zone.tagName)
+        zone = document.getElementById(zone || 'service-messages');
+
+    if (zone == null) return;
+
+    var manage = $(zone);
+
+    zone.innerHTML = '';
+    manage.removeClass('critical');
+    zone.style.display = 'none';
+
+    if (Modal && Modal.IsOpen())
+        Modal.Resize();
+}
+
+UI.ShowServiceMessages = function (result, zone) {
+    if (result == null)
+        result = { Success: false, Message: "Please correct the fields below.", Validation: [] };
+
+    if (zone == null || !zone.tagName)
+        zone = document.getElementById(zone || 'service-messages');
+
+    var manage = $(zone);
+    if (zone == null) return result.Success;
+
+    if (result.Success) {
+        manage.removeClass('message');
+        manage.removeClass('critical');
+        zone.style.display = 'none';
+    } else {
+        manage.addClass('message');
+        manage.addClass('critical');
+        zone.style.display = '';
+
+        var mainException = null;
+        if (result.Validation && result.Validation.length > 0)
+            mainException = result.Message || result.ExceptionMessage || 'Please correct the following issues:';
+        else
+            mainException = result.Message || result.ExceptionMessage || 'An unknown exception has occurred.  Please contact Technology Support for further assistance.';
+
+
+        var zoneContent = document.createElement('div');
+        zoneContent.innerHTML = encode(mainException);
+        var zoneNotes = [];
+        var zoneCodes = [];
+
+        if (result.Exceptions) {
+            while (result.Exceptions.length > 0) {
+                var note = result.Exceptions.pop();
+                if (note.Message != null && note.Message.length > 0) {
+                    zoneNotes.push(note.Message);
+                } else if (note.Code != null && note.Code.length > 0) {
+                    zoneCodes.push(note.Code);
+                }
+            }
+        }
+
+        zone.innerHTML = '';
+
+        if (zoneCodes.length > 0) {
+            var codeArea = document.createElement('div');
+            codeArea.className = 'code_area';
+            zone.appendChild(codeArea);
+
+            while (zoneCodes.length > 0) {
+                var codeDetail = zoneCodes.pop();
+                var appendCode = document.createElement('div');
+                appendCode.className = 'code';
+                appendCode.innerHTML = encode(codeDetail);
+                codeArea.appendChild(appendCode);
+            }
+        }
+
+        zone.appendChild(zoneContent);
+        while (zoneNotes.length > 0) {
+            var noteDetail = zoneNotes.pop();
+            var appendNote = document.createElement('div');
+            appendNote.className = 'note';
+            appendNote.innerHTML = encode(noteDetail);
+            zone.appendChild(appendNote);
+        }
+    }
+
+    if (Modal && Modal.IsOpen())
+        Modal.Resize();
+
+    return result.Success;
+}
+
+UI.ShowMessage = function (message, displayStyle, zone) {
+    if (zone == null || !zone.tagName)
+        zone = document.getElementById(zone || 'service-messages');
+
+    if (!message || zone == null) return;
+
+    zone.className = displayStyle || 'severity-good';
+    zone.style.display = '';
+    zone.innerHTML = encode(message);
+}
+
+UI.ShowSuccessMessage = function (message, zone) {
+    if (zone == null || !zone.tagName)
+        zone = document.getElementById(zone || 'service-messages');
+
+    if (zone == null) return;
+
+    message = message || 'You have successfully updated the record.';
+
+    zone.className = 'severity-good';
+    zone.style.display = '';
+    zone.innerHTML = encode(message);
+}
+
+UI.SetWaitIndicator = function (show, zone) {
+    if (zone == null || !zone.tagName)
+        zone = document.getElementById(zone || 'wait-indicator');
+
+    if (!zone)
+        zone = document.getElementById('page-wait-indicator');
+
+    if (zone)
+        zone.style.display = (show) ? '' : 'none';
+}
+
+UI.Jump = function (button, event) {
+    if (event.which && event.which != 1)
+        return true;
+
+    if (!button.tagName) button = document.getElementById(button);
+    while (button.tagName.toLowerCase() != 'a')
+        button = button.parentNode;
+
+    UI.SetWaitIndicator(true);
+    window.location = $(button).attr('href');
+
+    return false;
+}
+
+UI.ToggleLabelActive = function (checkbox) {
+    /// <summary>Toggles the state of the label associated with a checkbox.</summary>
+    /// <param name="checkbox">The input field that is being toggled.</param>
+
+    if (checkbox.checked)
+        $(checkbox.parentNode).addClass('label-active');
+    else
+        $(checkbox.parentNode).removeClass('label-active');
+}
+
+UI.BreakFrame = function () {
+    /// <summary>Causes the page to remove itself from a frameset.</summary>
+
+    if (top.location != self.location)
+        top.location = self.location;
+}
+
+UI.ViewNavElement = function (button, event) {
+    var view_complete = function (result, state) {
+        UI.SetWaitIndicator(false, 'page-wait-indicator');
+        UI.SetNavElement(button);
+    };
+
+    UI.SetWaitIndicator(true, 'page-wait-indicator');
+
+    var section = $(element);
+    section.addClass('loading');
+}
+
+/************************************
+**	CLASS :: Ajax
+************************************/
+Ajax = { }
+
+Ajax.Get = function (callback, type, uri, post, state) {
+    /// <summary>Process a request in the background to the web server with an XML response to a callback function.</summary>
+    /// <param name="callback">Function to callback when the request completes.</param>
+    /// <param name="type">Type of HTTP request being made ( GET or POST ).</param>
+    /// <param name="uri">URL to the page being requested.</param>
+    /// <param name="post">Information being posted with the request.</param>
+    /// <param name="state">State object being passed to the callback method.</param>
+
+    var manager = Ajax.CreateXmlHttpRequest();
+    manager.open(type, uri, true);
+
+    if (type == 'POST') {
+        manager.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    }
+
+    manager.onreadystatechange = function () {
+        if (manager.readyState == 4) {
+            if (Ajax.CheckForwardHeader(manager)) {
+                if (callback != null) {
+                    var response = { Content: manager.responseXML, StatusCode: manager.status, StatusMessage: manager.statusText, XHR: manager };
+                    callback(response, state);
+                }
+            }
+        }
+    }
+
+    manager.send(post);
+}
+
+Ajax.GetHtml = function (callback, elementId, type, uri, post, state) {
+    /// <summary>Process a request in the background to the web server with an HTML response.</summary>
+    /// <param name="callback">Function to callback when the request completes</param>
+    /// <param name="elementId">ID of the zone to write the transformed document to</param>
+    /// <param name="type">Type of HTTP request being made ( GET or POST )</param>
+    /// <param name="uri">URL to the page being requested</param>
+    /// <param name="post">Information being posted with the request</param>
+    /// <param name="state">State object being passed to the callback method.</param>
+
+    var manager = Ajax.CreateXmlHttpRequest();
+    manager.open(type, uri, true);
+
+    if (type == 'POST') {
+        manager.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    }
+
+    manager.onreadystatechange = function () {
+        if (manager.readyState == 4) {
+            if (Ajax.CheckForwardHeader(manager)) {
+                var response = { Content: manager.responseText, StatusCode: manager.status, StatusMessage: manager.statusText, XHR: manager };
+                Ajax.SetHtmlResponse(response, elementId, callback, state);
+            }
+        }
+    }
+
+    manager.send(post);
+}
+
+Ajax.GetJson = function (callback, type, uri, post, state) {
+    /// <summary>Process a request in the background to the web server with an JSON response.</summary>
+    /// <param name="callback">Function to callback when the request completes</param>
+    /// <param name="type">Type of HTTP request being made ( GET or POST )</param>
+    /// <param name="uri">URL to the page being requested</param>
+    /// <param name="post">Information being posted with the request</param>
+    /// <param name="state">State object being passed to the callback method.</param>
+
+    var manager = Ajax.CreateXmlHttpRequest();
+    manager.open(type, uri, true);
+
+    if (type == 'POST') {
+        manager.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    }
+
+    manager.onreadystatechange = function () {
+        if (manager.readyState == 4) {
+            if (Ajax.CheckForwardHeader(manager)) {
+                if (manager.status == 200) {
+                    var data = (window.JSON && window.JSON.parse) ?
+                        window.JSON.parse(manager.responseText) :
+                        $.parseJSON(manager.responseText);
+
+                    if (callback != null) callback(data, state);
+                } else {
+                    var failedData = { Success: false, StatusCode: manager.status, Message: manager.statusText, IsHttpException: true, XHR: manager };
+                    if (callback != null) callback(failedData, state);
+                }
+            }
+        }
+    }
+
+    manager.send(post);
+}
+
+Ajax.StepJsonSequence = function (settings) {
+    /// <summary>Performs a step in a sequence of JSON requests.</summary>
+    /// <param name="settings">The instructions used to process a step in a sequence.</param>
+
+    var step_complete = function (result, state) {
+        var success = UI.ShowServiceMessages(result, settings.MessageArea);
+        if (success) {
+            settings.OnSuccess(result, settings.State);
+        } else {
+            if (settings.OnException)
+                settings.OnException(result, settings.State);
+        }
+    }
+
+    Ajax.GetJson(step_complete, 'POST', settings.Uri, settings.PostData || '', settings.State);
+}
+
+Ajax.CheckForwardHeader = function (manager) {
+    /// <summary>Reviews the response headers for a redirect instructions.</summary>
+
+    var header = manager.getResponseHeader('X-Logged-Out');
+    if (header) {
+        window.location = header;
+        return false;
+    }
+
+    return true;
+}
+
+Ajax.CreateXmlHttpRequest = function () {
+    /// <summary>Creates an XMLHttpRequest object to submit data with.</summary>
+
+    try { return new ActiveXObject("Msxml2.XMLHTTP"); } catch (e) { }
+    try { return new ActiveXObject("Microsoft.XMLHTTP"); } catch (e) { }
+    try { return new XMLHttpRequest(); } catch (e) { }
+    alert("XMLHttpRequest not supported");
+    return null;
+}
+
+Ajax.SetHtmlResponse = function (response, elementId, callback, state) {
+    /// <summary>Sets the data retrieved from the request.</summary>
+    /// <param name="response">Data retrieved from the XmlHttpRequest.</param>
+    /// <param name="elementId">ID of the zone to write the transformed document to.</param>
+    /// <param name="callback">Function to callback when the request completes.</param>
+
+    document.getElementById(elementId).innerHTML = response.Content;
+    if (callback != null) callback(response, state);
+}
+
+Ajax.DeserializeDate = function (input) {
+    /// <summary>Deserializes a date returned from the .Net framework.</summary>
+
+    var constructor = input.replace(Ajax.JsonDate, "new Date($1)");
+    if (constructor == input)
+        return null;
+
+    return eval(constructor);
+}
+Ajax.JsonDate = new RegExp("^/Date\\(((\\d+)(-(\\d+))?)\\)/$");
+
+/************************************
+**	STATIC CLASS :: Client
+************************************/
+Client = { }
+
+Client.GetWidth = function () {
+    /// <summary>Gets the client's view port width.</summary>
+
+    if (window.innerWidth) {
+        return window.innerWidth;
+    } else if (document.documentElement && document.documentElement.clientWidth) {
+        return document.documentElement.clientWidth;
+    } else if (document.body) {
+        return document.body.clientWidth;
+    }
+}
+
+Client.GetHeight = function () {
+    /// <summary>Gets the client's view port height.</summary>
+
+    if (window.innerHeight) {
+        return window.innerHeight;
+    } else if (document.documentElement && document.documentElement.clientHeight) {
+        return document.documentElement.clientHeight;
+    } else if (document.body) {
+        return document.body.clientHeight;
+    }
+}
+
+Client.GetScrollWidth = function () {
+    /// <summary>Gets the client's left based scroll position.</summary>
+
+    if (window.pageXOffset) {
+        return window.pageXOffset;
+    } else if (document.documentElement && document.documentElement.scrollLeft) {
+        return document.documentElement.scrollLeft;
+    } else {
+        return document.body.scrollLeft;
+    }
+}
+
+Client.GetScrollHeight = function () {
+    /// <summary>Gets the client's top based scroll position.</summary>
+
+    if (window.pageYOffset) {
+        return window.pageYOffset;
+    } else if (document.documentElement.scrollTop) {
+        return document.documentElement.scrollTop;
+    } else if (document.body.scrollTop) {
+        return document.body.scrollTop;
+    } else {
+        return 0;
+    }
+}
+
+Client.GetMousePosition = function (e) {
+    /// <summary>Gets the current mouse position.</summary>
+    var mouse = { X: 0, Y: 0 };
+    mouse.X = e.clientX + Client.GetScrollWidth();
+    mouse.Y = e.clientY + Client.GetScrollHeight();
+
+    return mouse;
+}
+
+/*********************************************************
+**	STATIC CLASS :: Is
+**  VALIDATION HANDLERS
+*********************************************************/
+Is = { }
+
+function Validate(field, expression, state, exceptionLabel, placeholder) {
+    /// <summary>
+    /// Ensures the element is not the placeholder values and
+    /// validates the requested element against the requested expression.
+    /// </summary>
+    /// <param name="field">The identifier of the element the validation expression is being executed against.</param>
+    /// <param name="expression">The expression used to ensure the information within the field is valid.</param>
+    /// <param name="state">Additional information to pass to the validation expression.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+    /// <param name="placeholder">The placeholder shown in the interface on the form element, if null will use the element's title attribute.</param>
+
+    var element = (field.tagName) ? field : document.getElementById(field);
+    var j = $(element);
+
+    placeholder = placeholder || j.attr('placeholder');
+    if (element.value == placeholder) {
+        j.addClass('invalid-data');
+        return false;
+    }
+
+    var valid = true;
+    if (expression != null) {
+        Is.Trim(element);
+        valid = expression(element.value, state, exceptionLabel, element);
+    }
+
+    if (valid)
+        j.removeClass('invalid-data');
+    else
+        j.addClass('invalid-data');
+
+    if (exceptionLabel != null) {
+        if (!exceptionLabel.tagName)
+            exceptionLabel = document.getElementById(exceptionLabel);
+
+        if (exceptionLabel != null) {
+            if (valid)
+                $(exceptionLabel).removeClass('invalid-data');
+            else
+                $(exceptionLabel).addClass('invalid-data');
+        }
+    }
+
+    return valid;
+}
+
+Is.Trim = function (element) {
+    /// <summary>Trims the contents of the form element.</summary>
+    /// <param name="element">The form element being manipulated.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var value = new String(element.value);
+    while (true) {
+        if (value.length > 0) {
+            if (value.substring(0, 1) == ' ') {
+                value = value.substring(1, value.length);
+            } else if (value.substring(value.length - 1, value.length) == ' ') {
+                value = value.substring(0, value.length - 1);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    element.value = value;
+}
+
+Is.Expression = function (expression, value, allowEmpty) {
+    /// <summary>Matches the provided value against the regular expression.</summary>
+    /// <param name="expression">The regular expression used by the validation process.</param>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+
+    if (value == null) return false;
+    if (value == '')
+        return allowEmpty;
+
+    var exp = new RegExp(expression);
+    var source = new String(value);
+    return (source.match(exp) != null);
+}
+
+Is.NotEmpty = function (value, state, exceptionLabel) {
+    /// <summary>Validates the content provided is not empty.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="state">Additional information to pass to the validation expression.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    return !(value == '' || value == null);
+}
+
+Is.Match = function (value, expression, exceptionLabel) {
+    /// <summary>Ensures the value contains only alpha characters or is empty.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="expression">The regular expression to evaluate the value against.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    return Is.Expression(expression, value, false);
+}
+
+Is.Alpha = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains only alpha characters or is empty.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    return Is.Expression("^[a-zA-Z ]*$", value, (allowEmpty == true));
+}
+
+Is.Numeric = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains only numeric characters and is not empty.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    return Is.Expression("^\\d*$", value, (allowEmpty == true));
+}
+
+Is.Currency = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains information about currency.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var exp = "^\\-?\\(?\\$?(([0]{1}|([1-9]{1}\\d{0,2}(,?\\d{3})*))?)(\\.\\d{1,2})?\\)?$";
+    return Is.Expression(exp, value, (allowEmpty == true));
+}
+
+Is.NotNegative = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value is not a negative number.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var exp = "^[^\\-\\(]*$";
+    return Is.Expression(exp, value, (allowEmpty == true));
+}
+
+Is.NotZero = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value is not zero.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var exp = "(^\\d*\\.?\\d*[1-9]+\\d*$)|(^[1-9]+\\d*\\.\\d*$)";
+    return Is.Expression(exp, value, (allowEmpty == true));
+}
+
+Is.Date = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains information about a date.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var exp = "^([1-9]|0[1-9]|1[0-2])(-|/)(([1-9]|0[1-9]|[1-2][0-9]|3[0-1]))(-|/)(([0-9][0-9]|[2-9][0-9]{3}|19[0-9]{2}))$";
+    return Is.Expression(exp, value, (allowEmpty == true));
+}
+
+Is.TaxId = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains information about a tax identifier.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var ssnExp = "^\\d{3}-\\d{2}-\\d{4}$";
+    var tinExp = "^\\d{2}-\\d{7}$";
+    var numericExp = "^\\d{9}$";
+
+    return Is.Expression(ssnExp, value, (allowEmpty == true))
+        || Is.Expression(tinExp, value, (allowEmpty == true))
+        || Is.Expression(numericExp, value, (allowEmpty == true));
+}
+
+Is.PostalCode = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains information about a United States postal code.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var exp = "^\\d{5}$";
+    return Is.Expression(exp, value, (allowEmpty == true));
+}
+
+Is.PhoneNumber = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains information about a phone number.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    var simpleExp = "^\\d{3}(.|-)\\d{3}(.|-)\\d{4}$";
+    var longExp = "^\\(\\d{3}\\)( )?\\d{3}(.|-)\\d{4}$";
+    var numericExp = "^\\d{10}$";
+
+    return Is.Expression(simpleExp, value, (allowEmpty == true))
+        || Is.Expression(longExp, value, (allowEmpty == true))
+        || Is.Expression(numericExp, value, (allowEmpty == true));
+}
+
+Is.EmailAddress = function (value, allowEmpty, exceptionLabel) {
+    /// <summary>Ensures the value contains the basic information about an email address. A more rebust review occurrs server side.</summary>
+    /// <param name="value">The data being validated against the expression.</param>
+    /// <param name="allowEmpty">Whether to allow empty content in the value.</param>
+    /// <param name="exceptionLabel">A content element whose visibility is toggled by the result of the validation test.</param>
+
+    if (value == null) return false;
+    if (value == '')
+        return allowEmpty;
+
+    var splitAt = value.lastIndexOf('@');
+    var lastDot = value.lastIndexOf('.');
+
+    return (splitAt > 0 && lastDot > splitAt);
+}
+
+Is.Password = function (value, state, exceptionLabel) {
+    /// <summary>Ensures the value contains the minimum length requirement for a new password.</summary>
+
+    return (value != null && value.length && value.length >= 8);
+}
+
+Is.TransactionAmount = function (value, state, label, element) {
+    /// <summary>Ensures the value contains valid amount usable in a transaction.</summary>
+
+    if (!Is.Currency(value, false, label))
+        return false;
+
+    value = parseFloat(value.replace(/[^0-9\-\(\)\.]/g, ''));
+    if (isNaN(value) || value <= 0)
+        return false;
+
+    var dataLookup = $(element);
+    var minimum = parseFloat(dataLookup.attr('data-min'));
+    if (!isNaN(minimum) && value < minimum) {
+        return false;
+    }
+
+    var maximum = parseFloat(dataLookup.attr('data-max'));
+    if (!isNaN(maximum) && value > maximum) {
+        return false;
+    }
+
+    if (state != null) {
+        state.ValidatedAmount = value;
+    }
+
+    return true;
+};

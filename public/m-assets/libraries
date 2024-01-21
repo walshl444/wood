@@ -1,0 +1,147 @@
+
+Library = function () { }
+Library.Root = '/';
+Library.Images = '/images/';
+Library.Scripts = '/scripts/';
+Library.Styles = '/styles/';
+
+Browser = function () { }
+Browser.Name = 'Chrome';
+Browser.Version = { Major: 120, Minor: 0, Build: 0, Revision: 0 };
+Browser.LayoutEngine = 'AppleWebKit';
+Browser.LayoutEngineVersion = { Major: 537, Minor: 537, Build: -1, Revision: -1 };
+
+Constraints = function () {}
+var d = new Date('1/15/2024 8:39:12 PM');
+Constraints.PaymentCutoff = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()));
+Constraints.PaymentBlockout = ['1/15/2024','2/19/2024','5/27/2024','6/19/2024','7/4/2024','9/2/2024','10/14/2024','11/11/2024','11/28/2024','12/25/2024','1/1/2025','1/20/2025'];
+
+
+Resource = {
+    Weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    Months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    Ordinals: ['Last', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th', '28th', '29th', '30th', '31st'],
+    Common: {
+        Loading: 'Loading...',
+        Next: 'Continue',
+        Save: 'Save',
+        Saving: 'Processing, please wait...',
+        Cancel: 'Cancel',
+        Cancelling: 'Canceling...',
+        Complete: 'Finish',
+        PageNumber: '{0} of {1}'
+    },
+    SpeedBump: {
+        Title: 'Website Redirection Notice',
+        WarningMessage: 'You are now leaving the Woodforest National Bank website. Woodforest National Bank does not provide, and is not responsible for, the products, services or overall website content of third-party websites. Our privacy policies do not apply to linked websites. Please review the terms and conditions and the privacy policy posted on any other website you may use.',
+        Continue: 'Continue',
+        Cancel: 'Cancel',
+        DestinationLabel: 'The website you will be going to is:'
+    },
+    Scheduling: {
+        AllowMultipleDays: 'I would like to select multiple days',
+        OnlyOneDay: 'Never mind, I only need one day',
+        WeeklyDesc: 'Every {1} weeks on {0}',
+        MonthlyDesc: 'Every {1} months on the {0}',
+        UntilCancellationDesc: 'Continues indefinitely',
+        UntilDateDesc: 'By {0}',
+        UntilOccurrencesDesc: 'After {0} occurrences',
+        LastDay: 'Last Day'
+    },
+    MessageCenter: {
+        Sending: 'Sending...',
+        SendInquiry: 'Send Inquiry',
+        SendReply: 'Send Reply',
+        InquiryTitle: 'Send Inquiry',
+        AccountInquiryTitle: 'Send Account Inquiry',
+        SavedSystemAlerts: 'Your security alerts have been successfully updated.',
+        Warning: 'SMS Alerts',
+        SavedAccountAlerts: 'Your account alerts have been successfully updated.'
+    },
+    ContactPoint: {
+        CreateTitle: 'Create Contact Point',
+        EditTitle: 'Edit Contact Point',
+        Delete: 'Delete',
+        DeleteConfirm: 'Are you sure you want to delete this contact point?',
+        SaveEmail: 'Save Email Address',
+        SavePhone: 'Save Phone Number',
+        SavePostalAddress: 'Save Postal Address',
+        VerificationTokenSent: 'A verification token has been sent to the requested email address.',
+        VerificationTokenSending: 'A verification token is being sent to the requested address.',
+        MustHavePurpose: 'Must select a purpose for this address change.',
+        VerifyPhoneTitle: 'Verify Phone Number'
+    },
+    Transfers: {
+        QuickTransferTitle: 'Quick Transfer',
+        ScheduledTransferTitle: 'Add Recurring Transfer',
+        ConfirmTransfer: 'Confirm Transfer',
+        Back: 'Back',
+        Next: 'Next',
+        MakeRecurring: 'Recurring',
+        ClearRecurring: '',
+        SetSchedule: 'Edit Recurring Schedule',
+        NoSchedule: 'Transfer Funds',
+        TransferSuccess: '',
+        WizardInit: 'Setup Transfer',
+        WizardSchedule: 'Setup Recurring Schedule',
+        WizardFinal: 'Confirm \u0026amp; Finish',
+        EditTransferTitle: 'Edit Transfer',
+        LoadingTransferHistory: 'Loading transfer history',
+        LoadingScheduledTransfers: 'Loading scheduled transfers',
+        EditScheduleTitle: 'Change Schedule',
+        CancelTransferTitle: 'Cancel Transfer'
+    },
+    Accounts: {
+        Preferences: 'Account Preferences',
+        SavePreferences: 'Save Preferences',
+        ViewCheck: 'View Check Image',
+        TransactionDownloadTitle: 'Download Transactions',
+        WebsiteRedirectionTitle: 'Website Redirection Notice'
+      
+    },
+    BillPay: {
+        QuickPayTitle: 'Quick Bill Payment',
+        TermsTitle: '',
+        EnrollmentCompleted: 'Enrollment Completed',
+        FundingAccountTitle: 'Funding Account',
+        AcceptTermsToContinue: 'You must accept the terms and conditions to continue.',
+        EnrolledSuccessfully: 'You have enrolled successfully in Bill Pay.',
+        CreatePayment: 'Create Payment',
+        LoadingUpcomingPayments: 'Loading upcoming payments...',
+        PastCutOff: 'Past cut-off time.',
+        IsWeekend: 'Payments can\u0026#39;t be made on weekends.',
+        IsHoliday: 'Payments can\u0026#39;t be made on Federal holidays.'
+    },
+    AccountServices: {
+        Title: {
+            StopPayment: 'Request a Stop Payment',
+            ReportCard: 'Report a Lost or Stolen Debit Card',
+            OrderCard: 'Order Debit Card',
+            OrderCustomCard: 'Order Customized Debit Card',
+            StatementCopy: 'Request a Statement Copy',
+            CheckCopy: 'Request a Check Copy',
+            CheckReorder: 'Re-order Checks',
+            HavingTrouble: 'Having Trouble?'
+
+        }
+        
+    },
+    Security: {
+        ManageChallengesTitle: 'Manage Challenge Frequency',
+        RevokePasswordButton: 'Delete',
+        PasswordNotAccessed: 'Never',
+        LastChanged: 'Now',
+        ConfirmRevoke: 'Are you sure you want to delete this limited access password?',
+        ConfirmAuthenticatorDelete: 'Are you sure you want to delete this authenticator?',
+        ConfirmBiometricsDelete: 'Are you sure you want to delete this device?'
+    },
+    WesternUnion: {
+        ComplexNameType: 'The receiver uses a paternal / maternal name format',
+        SimpleNameType: 'The receiver uses first / last name format',
+        EditReceiverTitle: 'Edit Receiver Information',
+        EditMembershipTitle: 'Assign a My WU Number',
+        RemoveMembershipConfirm: 'Are you sure you want to remove your existing Western Union My WU\u0026lt;sup class=\u0026quot;quiet\u0026quot;\u0026gt;\u0026amp;reg;\u0026lt;/sup\u0026gt; Number?',
+        FraudNoticeTitle: 'Protect Yourself From Fraud'
+
+    }
+};
